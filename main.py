@@ -1,8 +1,6 @@
-from pyrogram import Client
+from Clicker import ClickerClient
 
 # Убрал персональные данные, чтобы не светить их на гите
-client = Client('test_client')
-
-client.start()
-client.send_message('me', 'test!')
+client = ClickerClient('test_client')
+client.run()
 client.stop()

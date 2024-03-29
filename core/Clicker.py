@@ -102,13 +102,12 @@ class ClickerClient:
             logger.error(f'Неизвестная ошибка: {ex}')
         await logger.complete()
 
-    async def run(self):
-        # user = await self.get_profile()
+    async def run(self):  # TODO: сделать систему повторных попыток для запроса (через декоратор?)
+        user = await self.get_profile()
         # last_tick = self.get_profile()['lastClickSeconds']
         time = 10
         while time > 0:
-            # logger.info(f'{user["id"]} is working.')
-            logger.info(f'Client is working.')
+            logger.info(f'{user["id"]} is working.')
             await logger.complete()
             await asyncio.sleep(1)
             time -= 1

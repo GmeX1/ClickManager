@@ -1,6 +1,8 @@
 from Clicker import ClickerClient
 
-# Убрал персональные данные, чтобы не светить их на гите
-client = ClickerClient('test_client')
-client.run()
-client.stop()
+
+if __name__ == '__main__':
+    clients = ClickerClient('test_client')
+
+# last_click = client.get_profile()['lastClickSeconds']
+# print(client.click(last_click))

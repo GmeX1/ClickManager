@@ -1,5 +1,7 @@
 API_ID = 123
 API_HASH = 'abcd'
+BASE_URL = 'https://arbuz.betty.games/api'
+ENC_KEY = 'click-secret'
 
 
 '''Для автоматизации можно использовать этот код:

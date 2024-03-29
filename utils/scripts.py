@@ -3,8 +3,8 @@ import glob
 
 from pyrogram import Client
 from pyrogram.raw.functions.messages import RequestWebView
+from core.Clicker import ClickerClient
 from temp_vars import BASE_URL
-from Clicker import ClickerClient
 
 
 def get_session_names():

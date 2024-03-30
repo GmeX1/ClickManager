@@ -35,6 +35,7 @@ class ClickerClient:
                           "Mobile Safari/537.36",
             "X-Telegram-Init-Data": self.get_init_data()
         })
+        self.auto_buy_
 
     def get_init_data(self):
         """Получение init даты для шапки запроса"""
@@ -51,29 +52,15 @@ class ClickerClient:
 
     @request_handler()
     async def get_boosts_list(self):
-        try:
-            result = await self.session.get(f'{BASE_URL}/boosts/metas', timeout=10)
-            return await result.json()
-        except TimeoutError:
-            logger.exception('Таймаут! Спим 10 секунд...')
-            await asyncio.sleep(10)
-        except Exception as ex:
-            logger.error(f'Неизвестная ошибка: {ex}')
-        await logger.complete()
+        result = await self.session.get(f'{BASE_URL}/boosts/metas', timeout=10)
+        return await result.json()
 
     @request_handler()
     async def buy_boost(self, meta_id: int):
-        try:
-            result = await self.session.post(f'{BASE_URL}/boosts/purchase', timeout=10, json={
-                'metaId': meta_id
-            })
-            return await result.json()
-        except TimeoutError:
-            logger.exception('Таймаут! Спим 10 секунд...')
-            await asyncio.sleep(10)
-        except Exception as ex:
-            logger.error(f'Неизвестная ошибка: {ex}')
-        await logger.complete()
+        result = await self.session.post(f'{BASE_URL}/boosts/purchase', timeout=10, json={
+            'metaId': meta_id
+        })
+        return await result.json()
 
     # async def buy_skin(self, skin_id):  # Адреса без функционала
     #     res_get1 = await self.session.get(f'{BASE_URL}/skin/all', timeout=10)  # Все скины
@@ -84,24 +71,18 @@ class ClickerClient:
 
     @request_handler()
     async def click(self, click_tick):
-        try:
-            msg = f'{self.client.get_me().id}:{click_tick}'.encode()
-            hashed = hmac.new(ENC_KEY.encode('UTF-8'), msg, sha256).hexdigest()
-            result = await self.session.post(f'{BASE_URL}/click/apply', timeout=10, json={
-                'count': 1,  # TODO: Сделать вариацию в кликах
-                'hash': hashed
-            })
-            return await result.json()
-        except TimeoutError:
-            logger.exception('Таймаут! Спим 10 секунд...')
-            await asyncio.sleep(10)
-        except Exception as ex:
-            logger.error(f'Неизвестная ошибка: {ex}')
-        await logger.complete()
+        msg = f'{self.client.get_me().id}:{click_tick}'.encode()
+        hashed = hmac.new(ENC_KEY.encode('UTF-8'), msg, sha256).hexdigest()
+        result = await self.session.post(f'{BASE_URL}/click/apply', timeout=10, json={
+            'count': 1,  # TODO: Сделать вариацию в кликах
+            'hash': hashed
+        })
+        return await result.json()
 
     async def run(self):
         user = await self.get_profile()
         logger.info(f'Got user info: {user}')
+        logger.info(f'Boosts: {self.get_boosts_list}')
         # last_tick = self.get_profile()['lastClickSeconds']
         time = 10
         while time > 0 and user is not None:

@@ -1,8 +1,13 @@
-import sys
-
+from core.utils.scripts import run_client, get_session_names
 from loguru import logger
+import sys
+import asyncio
 
-from utils.scripts import *
+
+async def run_tasks():
+    tasks = [asyncio.create_task(run_client(item)) for item in get_session_names()]
+    await asyncio.gather(*tasks)
+
 
 if __name__ == '__main__':
     logger.remove()

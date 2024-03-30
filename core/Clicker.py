@@ -1,15 +1,15 @@
 import asyncio
 import hmac
-from loguru import logger
-
 from hashlib import sha256
 from urllib.parse import unquote
 
 import aiohttp
+from loguru import logger
 from pyrogram import Client
 from pyrogram.raw.types.web_view_result_url import WebViewResultUrl
 
 from temp_vars import BASE_URL, ENC_KEY
+from .utils.decorators import request_handler
 
 
 class ClickerClient:
@@ -44,17 +44,12 @@ class ClickerClient:
         data = data.replace(user, unquote(user))
         return data
 
+    @request_handler()
     async def get_profile(self):
-        try:
-            result = await self.session.get(f'{BASE_URL}/users/me', timeout=10)
-            return await result.json()
-        except TimeoutError:
-            logger.exception('Таймаут! Спим 10 секунд...')
-            await asyncio.sleep(10)
-        except Exception as ex:
-            logger.error(f'Неизвестная ошибка: {ex}')
-        await logger.complete()
+        result = await self.session.get(f'{BASE_URL}/users/me', timeout=10)
+        return await result.json()
 
+    @request_handler()
     async def get_boosts_list(self):
         try:
             result = await self.session.get(f'{BASE_URL}/boosts/metas', timeout=10)
@@ -66,6 +61,7 @@ class ClickerClient:
             logger.error(f'Неизвестная ошибка: {ex}')
         await logger.complete()
 
+    @request_handler()
     async def buy_boost(self, meta_id: int):
         try:
             result = await self.session.post(f'{BASE_URL}/boosts/purchase', timeout=10, json={
@@ -86,6 +82,7 @@ class ClickerClient:
     #     res_post = await self.session.post(f'{BASE_URL}/skin/activate', timeout=10, json={'ids': [skin_id]})
     #     return [await res_get1.json(), await res_get2.json(), await res_post.json()]
 
+    @request_handler()
     async def click(self, click_tick):
         try:
             msg = f'{self.client.get_me().id}:{click_tick}'.encode()
@@ -102,11 +99,12 @@ class ClickerClient:
             logger.error(f'Неизвестная ошибка: {ex}')
         await logger.complete()
 
-    async def run(self):  # TODO: сделать систему повторных попыток для запроса (через декоратор?)
+    async def run(self):
         user = await self.get_profile()
+        logger.info(f'Got user info: {user}')
         # last_tick = self.get_profile()['lastClickSeconds']
         time = 10
-        while time > 0:
+        while time > 0 and user is not None:
             logger.info(f'{user["id"]} is working.')
             await logger.complete()
             await asyncio.sleep(1)

@@ -1,8 +1,11 @@
 import asyncio
 import glob
+import sys
 
+from loguru import logger
 from pyrogram import Client
 from pyrogram.raw.functions.messages import RequestWebView
+
 from core.Clicker import ClickerClient
 from temp_vars import BASE_URL
 
@@ -12,11 +15,6 @@ def get_session_names():
     session_names = list(map(lambda x: x.split('\\')[-1].split('.')[0], session_names))
     # session_names = list(map(lambda x: x.split('.')[0], session_names))
     return session_names
-
-
-async def run_tasks():
-    tasks = [asyncio.create_task(run_client(item)) for item in get_session_names()]
-    await asyncio.gather(*tasks)
 
 
 async def run_client(session_name):

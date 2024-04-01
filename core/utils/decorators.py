@@ -25,7 +25,7 @@ def request_handler(tries=10, log=False):
                     return await result
                 except TimeoutError or asyncio.TimeoutError:
                     tries -= 1
-                    logger.exception('Таймаут! Спим 10 секунд...')
+                    logger.exception('Таймаут! Спим 10 секунд...', backtrace=False, diagose=False)
                     await asyncio.sleep(10)
                 except Exception as ex:
                     logger.critical(f'Неизвестная ошибка от {ex.__class__.__name__}: {ex}')

@@ -2,6 +2,10 @@ API_ID = 123
 API_HASH = 'abcd'
 BASE_URL = 'https://arbuz.betty.games/api'
 ENC_KEY = 'click-secret'
+LOG_LEVEL = 'DEBUG'
+
+CLICKS_AMOUNT = [5, 160]
+CLICKS_SLEEP = [8, 25]
 
 
 '''Для автоматизации можно использовать этот код:

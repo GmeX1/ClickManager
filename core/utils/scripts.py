@@ -1,8 +1,5 @@
-import asyncio
 import glob
-import sys
 
-from loguru import logger
 from pyrogram import Client
 from pyrogram.raw.functions.messages import RequestWebView
 
@@ -17,8 +14,13 @@ def get_session_names():
     return session_names
 
 
-async def run_client(session_name):
-    client = Client(session_name)
+def get_clients():
+    sessions = get_session_names()
+    clients = [Client(session_name) for session_name in sessions]
+    return clients
+
+
+async def run_client(client):
     await client.start()
     raw_peer = await client.resolve_peer('wmclick_bot')
     web_app = await client.invoke(
@@ -29,4 +31,4 @@ async def run_client(session_name):
             from_bot_menu=False,
             url=f'{BASE_URL}/users/me'
         ))
-    await ClickerClient(client, web_app).run()
+    return ClickerClient(client, web_app)

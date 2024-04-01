@@ -6,7 +6,7 @@ LOG_LEVEL = 'DEBUG'
 
 CLICKS_AMOUNT = [5, 160]
 CLICKS_SLEEP = [8, 25]
-
+UPDATE_FREQ = 15  # TODO: периодическое обновление данных о профиле
 
 '''Для автоматизации можно использовать этот код:
 client = pyrogram.Client('test',api_id,api_hash)

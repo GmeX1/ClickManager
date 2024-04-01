@@ -42,6 +42,11 @@ class ClickerClient:
             'MINER': False,
             'ENERGY_RECOVERY': False
         }
+        self.buy_listing = {
+            'CLICK_POWER': list,
+            'MINER': list,
+            'ENERGY_RECOVERY': list
+        }
         self.do_click = 1
 
     def get_init_data(self):
@@ -60,14 +65,14 @@ class ClickerClient:
     @request_handler()
     async def get_boosts_list(self):
         result = await self.session.get(f'{BASE_URL}/boosts/metas', timeout=10)
-        return await result.json()
+        return result
 
     @request_handler()
     async def buy_boost(self, meta_id: int):
         result = await self.session.post(f'{BASE_URL}/boosts/purchase', timeout=10, json={
             'metaId': meta_id
         })
-        return await result.json()
+        return result
 
     async def skins(self, skin_id):
         """
@@ -79,7 +84,7 @@ class ClickerClient:
         res_get2 = await self.session.get(f'{BASE_URL}/skin/available', timeout=10)  # Доступные скины
         # Покупка скина
         res_post = await self.session.post(f'{BASE_URL}/skin/activate', timeout=10, json={'ids': [skin_id]})
-        return [await res_get1.json(), await res_get2.json(), await res_post.json()]
+        return [res_get1, res_get2, res_post]
 
     @request_handler()
     async def click(self, count, click_tick):

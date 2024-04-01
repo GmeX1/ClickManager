@@ -26,11 +26,19 @@ def request_handler(tries=10, log=False):
                 try:
                     if log:
                         logger.debug(f'Trying to request...')
-                    result = func(*args, **kwargs)
-                    return await result
+                    result = await func(*args, **kwargs)  # Здесь выполняется оборачиваемая функция
+
+                    if len(result) > 1:  # Если вместе с результатом запроса возвращаются другие данные
+                        status = result[-1].status  # !!ОБЯЗАТЕЛЬНО!! ставить результат запроса В САМЫЙ КОНЕЦ
+                    else:
+                        status = result.status
+                    if status != 200:
+                        logger.warning(f'Статус запроса: {result.status}')
+
+                    return result
                 except TimeoutError or asyncio.TimeoutError:
                     tries -= 1
-                    logger.exception('Таймаут! Спим 10 секунд...', backtrace=False, diagose=False)
+                    logger.warning('Таймаут! Спим 10 секунд...', backtrace=False, diagose=False)
                     await asyncio.sleep(10)
                 except Exception as ex:
                     logger.critical(f'Неизвестная ошибка от {ex.__class__.__name__}: {ex}')

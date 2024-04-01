@@ -12,6 +12,20 @@ def request_handler(tries=10, log=False):
     if log:
         logger.debug(f'Got into request decorator, tries: {tries}')
 
+    async def get_status(response):
+        """
+        Если вместе с результатом запроса возвращаются другие данные.
+        *ОБЯЗАТЕЛЬНО* ставить результат запроса В САМЫЙ КОНЕЦ
+        """
+        try:
+            if len(response) > 1:
+                status = response[-1].status
+            else:
+                status = response.status
+        except TypeError:
+            status = response.status
+        return status
+
     def wrapper(func):
         if log:
             logger.debug(f'Got into wrapper with: {func}')
@@ -28,12 +42,9 @@ def request_handler(tries=10, log=False):
                         logger.debug(f'Trying to request...')
                     result = await func(*args, **kwargs)  # Здесь выполняется оборачиваемая функция
 
-                    if len(result) > 1:  # Если вместе с результатом запроса возвращаются другие данные
-                        status = result[-1].status  # !!ОБЯЗАТЕЛЬНО!! ставить результат запроса В САМЫЙ КОНЕЦ
-                    else:
-                        status = result.status
+                    status = await get_status(result)
                     if status != 200:
-                        logger.warning(f'Статус запроса: {result.status}')
+                        logger.warning(f'Статус запроса: {status}')
 
                     return result
                 except TimeoutError or asyncio.TimeoutError:

@@ -40,7 +40,7 @@ async def run_tasks():  # Код грязный. Почищу, когда раз
     clients = get_clients()
     clicker_clients = [await run_client(client) for client in clients]
     tasks = [asyncio.create_task(client.run()) for client in clicker_clients]
-    tasks.append(asyncio.create_task(async_input()))  # Подключение инпута
+    # tasks.append(asyncio.create_task(async_input()))  # Подключение инпута
     await asyncio.gather(*tasks)
 
 

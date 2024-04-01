@@ -10,7 +10,7 @@ from loguru import logger
 from pyrogram import Client
 from pyrogram.raw.types.web_view_result_url import WebViewResultUrl
 
-from temp_vars import BASE_URL, CLICKS_AMOUNT, CLICKS_SLEEP, ENC_KEY
+from temp_vars import BASE_URL, CLICKS_AMOUNT, CLICKS_SLEEP, ENC_KEY, BUY_CLICK, BUY_MINER, BUY_ENERGY, BUY_MAX_LVL
 from .utils.decorators import request_handler
 
 
@@ -38,14 +38,17 @@ class ClickerClient:
             "X-Telegram-Init-Data": self.get_init_data()
         })
         self.buy_type = {
-            'CLICK_POWER': False,
-            'MINER': False,
-            'ENERGY_RECOVERY': False
+            'CLICK_POWER': BUY_CLICK,
+            'MINER': BUY_MINER,
+            'ENERGY_RECOVERY': BUY_ENERGY
         }
         self.buy_listing = {
-            'CLICK_POWER': list,
-            'MINER': list,
-            'ENERGY_RECOVERY': list
+            'CLICK_POWER': list(),
+            'CLICK_POWER_MINS': list(),
+            'MINER': list(),
+            'MINER_MINS': list(),
+            'ENERGY_RECOVERY': list(),
+            'ENERGY_RECOVERY_MINS': list()
         }
         self.do_click = 1
 
@@ -57,14 +60,42 @@ class ClickerClient:
         data = data.replace(user, unquote(user))
         return data
 
+    async def sort_boosts(self):  # TODO: Сделать разбив всех бустов, купленных бустов. Вывести минимальные цены.
+        all_response = await self.get_boosts_all()
+        all_data = await all_response.json()
+        all_data = all_data.get('items', None)
+
+        purchased_response = await self.get_boosts_purchased()
+        purchased_data = await purchased_response.json()
+        purchased_data = purchased_data.get('items', None)
+
+        logger.debug(all_data)
+        logger.debug(purchased_data)
+        await logger.complete()
+
+        # if all_data is not None:
+        #     click_power = map(lambda x: {x["id"], filter(lambda x: x.get('type') == 'CLICK_POWER', all_data))
+        #     self.buy_listing['CLICK_POWER'] =
+        #     self.buy_listing['CLICK_POWER'] = map()
+        #     self.buy_listing['MINER'] = list(filter(lambda x: x.get('type') == 'MINER', all_data))
+        #     self.buy_listing['ENERGY_RECOVERY'] = list(filter(lambda x: x.get('type') == 'ENERGY_RECOVERY', all_data))
+        #     logger.debug('Списки магазина успешно обновлены.')
+        # else:
+        #     logger.critical('В json магазина отсутствует список товаров!')
+
     @request_handler()
     async def get_profile_request(self):
         result = await self.session.get(f'{BASE_URL}/users/me', timeout=10)
         return result
 
     @request_handler()
-    async def get_boosts_list(self):
+    async def get_boosts_all(self):
         result = await self.session.get(f'{BASE_URL}/boosts/metas', timeout=10)
+        return result
+
+    @request_handler()
+    async def get_boosts_purchased(self):
+        result = await self.session.get(f'{BASE_URL}/boosts/active', timeout=10)
         return result
 
     @request_handler()
@@ -119,6 +150,8 @@ class ClickerClient:
             recovery_time = profile.get('energyLimit', 0) // profile.get('energyBoostSum', 0)
             recovery_start = -1
 
+            await self.sort_boosts()
+
             logger.debug(f'Текущая информация о профиле:\nЭнергия: {energy}\nВремя восстановления энергии:'
                          f'{recovery_time}\nБаланс:{balance}\nВремя последнего клика:{last_click}')
             while True:
@@ -159,7 +192,7 @@ class ClickerClient:
                     break
 
         except Exception as ex:
-            logger.critical(f'Неизвестная ошибка от {ex.__class__.__name__}: {ex}')
+            logger.exception(f'Неизвестная ошибка от {ex.__class__.__name__}: {ex}')
             await logger.complete()
             await self.stop()
 

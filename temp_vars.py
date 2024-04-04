@@ -10,8 +10,8 @@ UPDATE_FREQ = 15  # TODO: периодическое обновление дан
 
 BUY_MAX_LVL = 15
 BUY_CLICK = True
-BUY_MINER = True
-BUY_ENERGY = True
+BUY_MINER = False
+BUY_ENERGY = False
 
 
 # TODO: Проксирование + TLSv1.3

@@ -3,7 +3,7 @@ import glob
 from pyrogram import Client
 from pyrogram.raw.functions.messages import RequestWebView
 
-from core.Clicker import ClickerClient
+from core.clicker import ClickerClient
 from temp_vars import BASE_URL
 
 

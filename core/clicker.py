@@ -4,7 +4,7 @@ import random
 from hashlib import sha256
 from time import time
 from urllib.parse import unquote
-
+from .utils.boost_classes import BoostHandler
 import aiohttp
 from loguru import logger
 from pyrogram import Client
@@ -42,14 +42,7 @@ class ClickerClient:
             'MINER': BUY_MINER,
             'ENERGY_RECOVERY': BUY_ENERGY
         }
-        self.buy_listing = {
-            'CLICK_POWER': list(),
-            'CLICK_POWER_MINS': list(),
-            'MINER': list(),
-            'MINER_MINS': list(),
-            'ENERGY_RECOVERY': list(),
-            'ENERGY_RECOVERY_MINS': list()
-        }
+        self.buy_manager = BoostHandler()
         self.do_click = 1
 
     def get_init_data(self):
@@ -60,28 +53,31 @@ class ClickerClient:
         data = data.replace(user, unquote(user))
         return data
 
-    async def sort_boosts(self):  # TODO: Сделать разбив всех бустов, купленных бустов. Вывести минимальные цены.
+    # TODO: Сделать разбив всех бустов, купленных бустов. Вывести минимальные цены. Логирование + исключения
+    async def update_boosts(self, log=False):
         all_response = await self.get_boosts_all()
         all_data = await all_response.json()
         all_data = all_data.get('items', None)
 
-        purchased_response = await self.get_boosts_purchased()
-        purchased_data = await purchased_response.json()
-        purchased_data = purchased_data.get('items', None)
+        owned_response = await self.get_boosts_purchased()
+        owned_data = await owned_response.json()
+        owned_data = owned_data.get('items', None)
 
-        logger.debug(all_data)
-        logger.debug(purchased_data)
+        if log:
+            logger.debug(all_data)  # Проверить все бусты
+            logger.debug(owned_data)  # Проверить открытые бусты
+            await logger.complete()
+
+        if all_data is not None:
+            self.buy_manager.update_data(all_data, owned_data)
+            if log:  # Проверить самый первый буст среди усилителей клика
+                first_boost = self.buy_manager.get_boost_by_type('CLICK_POWER').get_boost_by_id(1)
+                logger.debug(first_boost)
+                logger.debug(first_boost.get_price())
+            logger.debug('Списки магазина успешно обновлены.')
+        else:
+            logger.critical('В json магазина отсутствует список товаров!')
         await logger.complete()
-
-        # if all_data is not None:
-        #     click_power = map(lambda x: {x["id"], filter(lambda x: x.get('type') == 'CLICK_POWER', all_data))
-        #     self.buy_listing['CLICK_POWER'] =
-        #     self.buy_listing['CLICK_POWER'] = map()
-        #     self.buy_listing['MINER'] = list(filter(lambda x: x.get('type') == 'MINER', all_data))
-        #     self.buy_listing['ENERGY_RECOVERY'] = list(filter(lambda x: x.get('type') == 'ENERGY_RECOVERY', all_data))
-        #     logger.debug('Списки магазина успешно обновлены.')
-        # else:
-        #     logger.critical('В json магазина отсутствует список товаров!')
 
     @request_handler()
     async def get_profile_request(self):
@@ -150,12 +146,12 @@ class ClickerClient:
             recovery_time = profile.get('energyLimit', 0) // profile.get('energyBoostSum', 0)
             recovery_start = -1
 
-            await self.sort_boosts()
+            await self.update_boosts(log=True)
 
             logger.debug(f'Текущая информация о профиле:\nЭнергия: {energy}\nВремя восстановления энергии:'
                          f'{recovery_time}\nБаланс:{balance}\nВремя последнего клика:{last_click}')
             while True:
-                if any(self.buy_type.values()):  # TODO: Система авто покупок + Авто обновление баланса
+                if any(self.buy_type.values()):  # TODO: Система авто покупок
                     pass
 
                 if self.do_click == 1 and energy > 10 and recovery_start == -1:
@@ -183,6 +179,7 @@ class ClickerClient:
                 elif self.do_click != 2 and recovery_start != -1:
                     if time() - recovery_start >= recovery_time:
                         logger.info('Восстановление энергии закончено, продолжаем работу!')
+                        # TODO: нет авто обновления баланса
                         recovery_start = -1
 
                 elif self.do_click == 2:

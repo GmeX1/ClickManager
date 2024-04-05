@@ -4,13 +4,15 @@ import random
 from hashlib import sha256
 from time import time
 from urllib.parse import unquote
-from .utils.boost_classes import BoostHandler
+
 import aiohttp
 from loguru import logger
 from pyrogram import Client
 from pyrogram.raw.types.web_view_result_url import WebViewResultUrl
 
-from temp_vars import BASE_URL, CLICKS_AMOUNT, CLICKS_SLEEP, ENC_KEY, BUY_CLICK, BUY_MINER, BUY_ENERGY, BUY_MAX_LVL
+from temp_vars import BASE_URL, BUY_CLICK, BUY_ENERGY, BUY_MAX_LVL, BUY_MINER, CLICKS_AMOUNT, CLICKS_SLEEP, ENC_KEY, \
+    UPDATE_FREQ, UPDATE_VAR
+from .utils.boost_classes import Boost, BoostHandler
 from .utils.decorators import request_handler
 
 
@@ -37,11 +39,6 @@ class ClickerClient:
                           "Mobile Safari/537.36",
             "X-Telegram-Init-Data": self.get_init_data()
         })
-        self.buy_type = {
-            'CLICK_POWER': BUY_CLICK,
-            'MINER': BUY_MINER,
-            'ENERGY_RECOVERY': BUY_ENERGY
-        }
         self.buy_manager = BoostHandler()
         self.do_click = 1
 
@@ -53,7 +50,7 @@ class ClickerClient:
         data = data.replace(user, unquote(user))
         return data
 
-    # TODO: Сделать разбив всех бустов, купленных бустов. Вывести минимальные цены. Логирование + исключения
+    # TODO: Логирование + исключения
     async def update_boosts(self, log=False):
         all_response = await self.get_boosts_all()
         all_data = await all_response.json()
@@ -69,7 +66,7 @@ class ClickerClient:
             await logger.complete()
 
         if all_data is not None:
-            self.buy_manager.update_data(all_data, owned_data)
+            self.buy_manager.update_data(all_data, owned_data, level=BUY_MAX_LVL)
             if log:  # Проверить самый первый буст среди усилителей клика
                 first_boost = self.buy_manager.get_boost_by_type('CLICK_POWER').get_boost_by_id(1)
                 logger.debug(first_boost)
@@ -78,6 +75,13 @@ class ClickerClient:
         else:
             logger.critical('В json магазина отсутствует список товаров!')
         await logger.complete()
+
+    async def update_boosts_stats(self, boost_types: list[str] = None):  # TODO: обновление данных после покупки
+        self.buy_manager.update_stats(boost_types=boost_types, level=BUY_MAX_LVL)
+
+    @request_handler()  # TODO: запрос на покупку буста
+    async def buy_boost(self, boost: Boost):
+        pass
 
     @request_handler()
     async def get_profile_request(self):
@@ -101,6 +105,7 @@ class ClickerClient:
         })
         return result
 
+    @request_handler()
     async def skins(self, skin_id):
         """
         Нашёл функционал для скинов, ковыряясь в приложении через FireFox.
@@ -134,7 +139,7 @@ class ClickerClient:
                 raise Exception(f'Не удалось получить профиль! Код сервера: {profile.status}')
 
             profile = await profile.json()
-            logger.debug(f'Получена информация о профиле {profile.get("id", 0)}')
+            logger.info(f'Получена информация о профиле {profile.get("id", 0)}')
             await logger.complete()
             if profile.get('banned', ''):
                 raise Exception('Ваш аккаунт был заблокирован приложением! Останавливаем работу...')
@@ -143,16 +148,46 @@ class ClickerClient:
             balance = profile.get('clicks', 0)
             last_click = profile.get('lastClickSeconds', 0)
 
-            recovery_time = profile.get('energyLimit', 0) // profile.get('energyBoostSum', 0)
+            recovery_time = profile.get('energyLimit', 0) // profile.get('energyBoostSum', 0) / 2
             recovery_start = -1
+            profile_update_timer = UPDATE_FREQ + random.uniform(-UPDATE_VAR, UPDATE_VAR)
+            profile_update_start = time()
 
-            await self.update_boosts(log=True)
+            self.buy_manager.set_keys(BUY_CLICK, BUY_MINER, BUY_ENERGY)
+            await self.update_boosts(log=False)
 
+            logger.info('Данные магазина успешно получены')
             logger.debug(f'Текущая информация о профиле:\nЭнергия: {energy}\nВремя восстановления энергии:'
                          f'{recovery_time}\nБаланс:{balance}\nВремя последнего клика:{last_click}')
             while True:
-                if any(self.buy_type.values()):  # TODO: Система авто покупок
-                    pass
+                if time() - profile_update_start >= profile_update_timer and recovery_time == -1:
+                    profile = await self.get_profile_request()
+                    if profile is None:
+                        raise Exception('Не удалось получить профиль!')
+                    elif profile.status != 200:
+                        raise Exception(f'Не удалось получить профиль! Код сервера: {profile.status}')
+
+                    profile = await profile.json()
+                    if profile.get('banned', ''):
+                        raise Exception('Ваш аккаунт был заблокирован приложением! Останавливаем работу...')
+
+                    energy = profile.get('energy', 0)
+                    balance = profile.get('clicks', 0)
+                    last_click = profile.get('lastClickSeconds', 0)
+
+                    recovery_time = profile.get('energyLimit', 0) // profile.get('energyBoostSum', 0) / 2
+                    profile_update_timer = UPDATE_FREQ + random.uniform(-UPDATE_VAR, UPDATE_VAR)
+                    profile_update_start = time()
+
+                    logger.debug('Информация о профиле успешно обновлена.')
+                    await logger.complete()
+
+                if self.buy_manager.is_enabled():
+                    if self.buy_manager.get_min_price() < balance:
+                        boost = self.buy_manager.get_min_boost()
+                        logger.debug(f'MIN BOOST: {boost}')
+                        self.buy_manager.set_keys()  # Анти спам, выключает менеджер бустов
+                        # await self.buy_boost(boost)  # TODO: процесс покупки бустов
 
                 if self.do_click == 1 and energy > 10 and recovery_start == -1:
                     count = random.randint(CLICKS_AMOUNT[0], min(CLICKS_AMOUNT[1], int(energy)))
@@ -179,7 +214,6 @@ class ClickerClient:
                 elif self.do_click != 2 and recovery_start != -1:
                     if time() - recovery_start >= recovery_time:
                         logger.info('Восстановление энергии закончено, продолжаем работу!')
-                        # TODO: нет авто обновления баланса
                         recovery_start = -1
 
                 elif self.do_click == 2:

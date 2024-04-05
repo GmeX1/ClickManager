@@ -1,3 +1,5 @@
+from loguru import logger
+
 from .exceptions import EmptyBoostList, UnknownBoostType
 
 
@@ -9,13 +11,11 @@ class BoostHandler:
             'ENERGY_RECOVERY': BoostList('ENERGY_RECOVERY')
         }
         self.enabled_keys = list()
+        self.min_buy = float('inf')
+        self.min_upgrade = float('inf')
 
-    def get_boost_by_type(self, boost_type: str):
-        if boost_type in self.type_list.keys():
-            return self.type_list[boost_type]
-        raise UnknownBoostType(f'Неизвестный ключ буста: {boost_type}')
-
-    def update_keys(self, click: bool = False, miner: bool = False, energy: bool = False):
+    def set_keys(self, click: bool = False, miner: bool = False, energy: bool = False):
+        """Используется для выбора покупаемых разделов. Если ключ = True: покупать можно"""
         out = list()
         if click:
             out.append('CLICK_POWER')
@@ -25,46 +25,51 @@ class BoostHandler:
             out.append('ENERGY_RECOVERY')
         self.enabled_keys = out.copy()
 
-    def update_data(self, json_data: list[dict] = None, own_data: list[dict] = None, boost_types: list[str] = None):
-        """Полное обновление данных, включая json и статистику"""
+    def update_data(self, json_data: list[dict] = None, own_data: list[dict] = None, boost_types: list[str] = None,
+                    level: int = None):
+        """Обновление данных json и статистики"""
         if boost_types is None:
-            for key in self.type_list.keys():
+            for key in self.enabled_keys:
                 self.type_list[key].update_data(json_data, own_data)
         else:
             for key in boost_types:
                 self.type_list[key].update_data(json_data, own_data)
+        self.update_stats(boost_types=boost_types, level=level)
 
-    def update_stats(self, boost_types: list[str] = None):
-        """Использовать, если нет необходимости обновлять json данные"""
+    def update_stats(self, boost_types: list[str] = None, level: int = None):
         if boost_types is None:
-            for key in self.type_list.keys():
-                self.type_list[key].update_stats()
+            for key in self.enabled_keys:
+                self.type_list[key].update_stats(level=level)
         else:
             for key in boost_types:
-                self.type_list[key].update_stats()
+                self.type_list[key].update_stats(level=level)
 
-    def get_min_buy(self, boost_type: str):
+        self.min_buy = min([self.type_list[i].min_buy for i in self.enabled_keys])
+        self.min_upgrade = min([self.type_list[i].min_upgrade for i in self.enabled_keys])
+
+    def get_min_boost(self):
+        boosts = filter(lambda x: x is not None, [self.type_list[i].get_min_boost() for i in self.enabled_keys])
+        boosts = list(filter(lambda x: x.get_price() == self.get_min_price(), boosts))
+        if len(boosts) == 0:
+            raise EmptyBoostList('Не удалось получить минимальный по цене буст!')
+        elif len(boosts) > 1:
+            logger.warning('Найдено более 1 совпадающего по цене буста!')
+        return boosts[0]
+
+    def get_min_price(self):
+        return min(self.min_buy, self.min_upgrade)
+
+    def get_boost_by_type(self, boost_type: str):
         if boost_type in self.type_list.keys():
-            return self.type_list[boost_type].min_buy
+            return self.type_list[boost_type]
         raise UnknownBoostType(f'Неизвестный ключ буста: {boost_type}')
 
-    def get_min_upgrade(self, boost_type: str):
-        if boost_type in self.type_list.keys():
-            return self.type_list[boost_type].min_upgrade
-        raise UnknownBoostType(f'Неизвестный ключ буста: {boost_type}')
-
-    def get_min(self, boost_type: str):
-        if boost_type in self.type_list.keys():
-            upgrade = self.type_list[boost_type].min_upgrade
-            buy = self.type_list[boost_type].min_buy
-            if min(buy, upgrade) == buy:
-                return buy, 'buy'
-            return upgrade, 'upgrade'
-        raise UnknownBoostType(f'Неизвестный ключ буста: {boost_type}')
+    def is_enabled(self):
+        return len(self.enabled_keys) > 0
 
 
 class BoostList:
-    # TODO: объеденить форматирование (id и metaId) для совместимости между собой. Унифицировать апгрейды/покупки
+    # TODO: Выдавать id минимального к покупке/улучшению буста
     def __init__(self, boost_type: str, all_boosts: list[dict] = None, owned_boosts: list[dict] = None):
         self.type = boost_type
         self.boosts: list[Boost] = list()
@@ -73,35 +78,61 @@ class BoostList:
             self.update_data(all_boosts, owned_boosts)
         self.min_buy = 0
         self.min_upgrade = 0
+        self.max_level = 0
+
+    def set_max_level(self, level: int):
+        self.max_level = level
 
     def update_data(self, all_boosts: list[dict] = None, owned_boosts: list[dict] = None):
-        """Полное обновление данных, включая json и статистику"""
+        """Обновление данных json и статистики"""
         if all_boosts is not None:
             self.boosts = [Boost(i) for i in filter(lambda x: x.get('type') == self.type, all_boosts)]
             self.ids = self.get_ids()
-            self.update_min_buy()
         if owned_boosts is not None:
             if len(self.boosts) < 1:
                 raise EmptyBoostList('Список бустов пуст! Обновите список и попробуйте снова.')
             for boost in owned_boosts:
                 meta_id = boost.get('metaId', -1)
                 if meta_id in self.ids:
-                    self.get_boost_by_id(meta_id).update_buy_state(boost)
-            self.update_min_upgrade()
+                    self.get_boost_by_id(meta_id).set_buy_state(boost)
+        if all_boosts is not None or owned_boosts is not None:
+            self.update_stats()
 
-    def update_stats(self):
+    def update_stats(self, level: int = None):
         """Использовать, если нет необходимости обновлять json данные"""
+        if level is not None:
+            self.set_max_level(level)
         self.update_min_buy()
         self.update_min_upgrade()
 
     def update_min_upgrade(self):
-        self.min_upgrade = min(map(lambda x: x.get_price(), filter(lambda x: x.is_bought(), self.boosts)))
+        boosts = list(filter(lambda x: x.is_bought() and x.level < self.max_level, self.boosts))
+        if not boosts:
+            self.min_upgrade = float('inf')
+        else:
+            self.min_upgrade = min(map(lambda x: x.get_price(), boosts))
 
     def update_min_buy(self):
-        self.min_buy = min(map(lambda x: x.get_price(), filter(lambda x: not x.is_bought(), self.boosts)))
+        boosts = list(filter(lambda x: not x.is_bought(), self.boosts))
+        if not boosts:
+            self.min_buy = float('inf')
+        else:
+            self.min_buy = min(map(lambda x: x.get_price(), boosts))
+
+    def get_min_boost(self):
+        boosts = list(filter(
+            lambda x: (x.get_price() == self.min_upgrade and x.level != -1) or (
+                    x.get_price() == self.min_buy and x.level == -1),
+            self.boosts))
+        if len(boosts) == 0:
+            raise EmptyBoostList('Минимальный буст не найден!')
+        return min(boosts, key=lambda x: x.get_price())
 
     def get_boost_by_id(self, boost_id: int):
-        return list(filter(lambda x: x.id == boost_id, self.boosts))[0]
+        boost = list(filter(lambda x: x.id == boost_id, self.boosts))
+        if boost:
+            return boost[0]
+        return None
 
     def get_ids(self):
         return list(map(lambda x: x.id, self.boosts))
@@ -124,6 +155,9 @@ class Boost:
         else:
             self.level = -1
 
+    def set_buy_state(self, item_json: dict):
+        self.level = item_json.get('level', '')
+
     def get_price(self):
         if self.level != -1:
             return self.price_base * self.price_mod * (self.level + 1)
@@ -134,9 +168,6 @@ class Boost:
         if self.level != -1:
             return True
         return False
-
-    def update_buy_state(self, item_json: dict):
-        self.level = item_json.get('level', '')
 
     def __repr__(self):
         return f'Boost(id={self.id}, name={self.name}, level={self.level})'

@@ -6,9 +6,10 @@ LOG_LEVEL = 'DEBUG'
 
 CLICKS_AMOUNT = [5, 160]
 CLICKS_SLEEP = [8, 25]
-UPDATE_FREQ = 15  # TODO: периодическое обновление данных о профиле
+UPDATE_FREQ = 30  # Частота обновления
+UPDATE_VAR = 4  # Разброс по частоте обновления
 
-BUY_MAX_LVL = 15
+BUY_MAX_LVL = 15  # TODO: -1 в этой переменной должен отключать покупку апгрейдов
 BUY_CLICK = True
 BUY_MINER = False
 BUY_ENERGY = False

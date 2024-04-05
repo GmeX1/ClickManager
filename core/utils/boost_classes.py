@@ -44,8 +44,17 @@ class BoostHandler:
             for key in boost_types:
                 self.type_list[key].update_stats(level=level)
 
-        self.min_buy = min([self.type_list[i].min_buy for i in self.enabled_keys])
-        self.min_upgrade = min([self.type_list[i].min_upgrade for i in self.enabled_keys])
+        buy_list = [self.type_list[i].min_buy for i in self.enabled_keys]
+        if buy_list:
+            self.min_buy = min(buy_list)
+        else:
+            self.min_buy = float('inf')
+
+        upgrade_list = [self.type_list[i].min_upgrade for i in self.enabled_keys]
+        if upgrade_list:
+            self.min_upgrade = min(upgrade_list)
+        else:
+            self.min_upgrade = float('inf')
 
     def get_min_boost(self):
         boosts = filter(lambda x: x is not None, [self.type_list[i].get_min_boost() for i in self.enabled_keys])
@@ -69,7 +78,6 @@ class BoostHandler:
 
 
 class BoostList:
-    # TODO: Выдавать id минимального к покупке/улучшению буста
     def __init__(self, boost_type: str, all_boosts: list[dict] = None, owned_boosts: list[dict] = None):
         self.type = boost_type
         self.boosts: list[Boost] = list()
@@ -152,11 +160,14 @@ class Boost:
 
         if json_bought is not None:
             self.level = json_bought.get('level', '')
+            self.abs_id = json_bought.get('id', '')
         else:
             self.level = -1
+            self.abs_id = -1
 
     def set_buy_state(self, item_json: dict):
         self.level = item_json.get('level', '')
+        self.abs_id = item_json.get('id', '')
 
     def get_price(self):
         if self.level != -1:

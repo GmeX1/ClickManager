@@ -12,7 +12,7 @@ BUY_MAX_LVL = 15
 BUY_CLICK = True
 BUY_MINER = True
 BUY_ENERGY = True
-
+acc_dict = {}
 
 # TODO: Проксирование + TLSv1.3
 '''Для автоматизации можно использовать этот код:

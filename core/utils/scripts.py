@@ -2,6 +2,8 @@ import glob
 
 from pyrogram import Client
 from pyrogram.raw.functions.messages import RequestWebView
+from pyrogram.errors import ActiveUserRequired, AuthKeyInvalid, AuthKeyPermEmpty, AuthKeyUnregistered, \
+    AuthKeyDuplicated, SessionExpired, SessionPasswordNeeded, SessionRevoked, UserDeactivated, UserDeactivatedBan
 
 from core.Clicker import ClickerClient
 from temp_vars import BASE_URL
@@ -32,3 +34,17 @@ async def run_client(client):
             url=f'{BASE_URL}/users/me'
         ))
     return ClickerClient(client, web_app)
+
+
+async def client_auth_check(client: Client):
+    try:
+        info = await client.get_me()
+        if info:
+            return True
+        return False
+    except (
+            ActiveUserRequired, AuthKeyInvalid, AuthKeyPermEmpty, AuthKeyUnregistered, AuthKeyDuplicated,
+            SessionExpired,
+            SessionPasswordNeeded, SessionRevoked, UserDeactivated, UserDeactivatedBan
+    ):
+        return False

@@ -6,17 +6,12 @@ from aiogram.fsm.state import StatesGroup, State
 from aiogram.fsm.context import FSMContext
 from Private import api_id, api_hash
 from pyrogram import Client
+from pyrogram.errors.exceptions import bad_request_400
 
 router = Router()
-Number = ''
-
-sCoder = ''
 
 
-# Cliert = 0
-
-
-# TODO: Дописать настройки кликера, словарь, процесс входа,
+# TODO: Дописать настройки кликера, словарь
 
 class Reg(StatesGroup):
     number = State()
@@ -71,33 +66,29 @@ async def get_prof(message: Message):
 
 
 @router.message(Command('reg'))
-async def reg(message: Message, state: FSMContext):
-    await state.set_state(Reg.number)
-    await message.reply('Введите свой номер телефона', reply_markup=k.contact_btn)
+async def reg(callback: CallbackQuery):
+    await callback.answer('Отправьте свой контакт', reply_markup=k.contact_btn)
 
 
 # Проверка, что пользователь ввел свой номер телефона
-@router.message(F.contact)
+@router.message(F.contact)  # TODO: Нельзя напрямую отправлять код 0_о
 async def save_phone_number(message: Message, state: FSMContext):
     if message.contact.user_id == message.from_user.id:
         await state.update_data(number=message.contact.phone_number)
         client = Client(str(message.from_user.id), api_id, api_hash)
         await client.connect()
         sCode = await client.send_code(message.contact.phone_number)
-        await state.update_data(sCode=sCode)
-        await state.update_data(Clients=client)
-        await message.answer('Введите код')
+        await state.update_data(Clients=client, sCode=sCode)
+        await message.answer('Введите код (⚠️⚠️⚠️ОБЯЗАТЕЛЬНО⚠️⚠️⚠️: поставьте пробел внутри кода, место не важно)')
         await state.set_state(Reg.kod)
-
-
-@router.message(Reg.number)
-async def reg_number(message: Message, state: FSMContext):
-    await state.update_data(number=message.text)
 
 
 @router.message(Reg.kod)
 async def reg_kod(message: Message, state: FSMContext):
-    data = await state.get_data()
-    await data["Clients"].sign_in(str(data["number"]), data["sCode"].phone_code_hash, message.text)
-    await message.answer("Спасибо")
-    await state.clear()
+    try:
+        data = await state.get_data()
+        await data["Clients"].sign_in(data["number"], data["sCode"].phone_code_hash, message.text.replace(' ', ''))
+        await message.answer("Спасибо")
+        await state.clear()
+    except bad_request_400:
+        await message.answer('Ошибка входа. Отправьте контакт заново и перечитайте условия')

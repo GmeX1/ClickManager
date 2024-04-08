@@ -62,13 +62,13 @@ class ClickerClient:
         :param shop_keys: обновлять ли ключи магазина
         :return: исключение при ошибке ИЛИ словарь с необходимыми значениями
         """
-        profile = await self.get_profile_request()
-        if profile is None:
+        profile_request = await self.get_profile_request()
+        profile = await profile_request.json()
+        if profile_request is None:
             return Exception('Не удалось получить профиль!')
-        elif profile.status != 200:
-            return Exception(f'Не удалось получить профиль! Код сервера: {profile.status}')
+        elif profile_request.status != 200:
+            return Exception(f'Не удалось получить профиль! Код сервера: {profile.status} ({profile})')
 
-        profile = await profile.json()
         if profile.get('banned', ''):
             return Exception('Ваш аккаунт был заблокирован приложением! Останавливаем работу...')
 

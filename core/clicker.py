@@ -14,6 +14,7 @@ from temp_vars import BASE_URL, BUY_CLICK, BUY_ENERGY, BUY_MAX_LVL, BUY_MINER, C
     UPDATE_FREQ, UPDATE_VAR
 from .utils.boost_classes import BoostHandler
 from .utils.decorators import request_handler
+from .utils.proxy_n_tls import get_ssl
 
 
 class ClickerClient:
@@ -23,22 +24,26 @@ class ClickerClient:
         """Создание клиента pyrogram, создание сессии для запросов"""
         self.client = client
         self.webviewApp = web_app
-        self.session = aiohttp.ClientSession(headers={  # TODO: Стоило бы повесить TLSv1.3
-            "Accept": "application/json, text/plain, */*",
-            "Accept-Encoding": "gzip, deflate, br",
-            "Accept-Language": "ru-RU,ru;q=0.8,en-US;q=0.5,en;q=0.3",
-            "Connection": 'keep-alive',
-            "Host": "arbuz.betty.games",
-            "Origin": "https://arbuzapp.betty.games",
-            "Referer": "https://arbuzapp.betty.games/",
-            "Sec-Fetch-Dest": "empty",
-            "Sec-Fetch-Mode": "cors",
-            "Sec-Fetch-Site": "same-site",
-            "TE": "trailers",
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 "
-                          "Mobile Safari/537.36",
-            "X-Telegram-Init-Data": self.get_init_data()
-        })
+        self.ssl_connector = aiohttp.TCPConnector(ssl_context=get_ssl())
+        self.session = aiohttp.ClientSession(
+            headers={  # TODO: Стоило бы повесить TLSv1.3
+                "Accept": "application/json, text/plain, */*",
+                "Accept-Encoding": "gzip, deflate, br",
+                "Accept-Language": "ru-RU,ru;q=0.8,en-US;q=0.5,en;q=0.3",
+                "Connection": 'keep-alive',
+                "Host": "arbuz.betty.games",
+                "Origin": "https://arbuzapp.betty.games",
+                "Referer": "https://arbuzapp.betty.games/",
+                "Sec-Fetch-Dest": "empty",
+                "Sec-Fetch-Mode": "cors",
+                "Sec-Fetch-Site": "same-site",
+                "TE": "trailers",
+                "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) "
+                              "Chrome/121.0.0.0 Mobile Safari/537.36",
+                "X-Telegram-Init-Data": self.get_init_data()
+            },
+            connector=self.ssl_connector
+        )
         self.buy_manager = BoostHandler()
         self.do_click = 1
 
@@ -300,5 +305,6 @@ class ClickerClient:
             await self.stop()
 
     async def stop(self):
+        await self.ssl_connector.close()
         await self.session.close()
         await self.client.stop()

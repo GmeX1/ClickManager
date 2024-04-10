@@ -200,6 +200,7 @@ class ClickerClient:
             recovery_start = -1
             profile_update_timer = UPDATE_FREQ + random.uniform(-UPDATE_VAR, UPDATE_VAR)
             profile_update_start = time()
+            shop_cooldown_start = time() - 10
 
             # await self.update_boosts(log=False)
 
@@ -207,7 +208,8 @@ class ClickerClient:
             logger.debug(f'Текущая информация о профиле:\nЭнергия: {energy}\nВремя восстановления энергии:'
                          f'{recovery_time}\nБаланс:{balance}\nВремя последнего клика:{last_click}')
             while True:
-                if time() - profile_update_start >= profile_update_timer and recovery_start == -1:
+                profile_time = time() - profile_update_start
+                if profile_time >= profile_update_timer:
                     if profile_update_timer == -1:
                         shop = True
                     else:
@@ -230,39 +232,48 @@ class ClickerClient:
                     await logger.complete()
 
                 if self.buy_manager.is_enabled():
-                    if self.buy_manager.get_min_price() < balance:
+                    shop_cooldown = time() - shop_cooldown_start
+                    if self.buy_manager.get_min_price() < balance and profile_time > 2 and shop_cooldown > 15:
                         boost = self.buy_manager.get_min_boost()
                         logger.debug(f'MIN BOOST: {boost}')
 
-                        bought = False
+                        shop_flag = False
                         if boost.level == -1:
                             buy = await self.buy_boost(boost.id)
-                            if buy.status != 200:
+                            if buy.status == 400:
+                                logger.error(f'Недостаточно кликов, чтобы купить буст! Обновляюсь и сплю 15 секунд...')
+                                profile_update_timer = -1
+                                shop_cooldown_start = time()
+                                shop_flag = True
+                            elif buy.status != 200:
                                 info = await buy.json()
                                 logger.error(
                                     f'Не удалось купить буст! Код ошибки: {buy.status} ({info.get("detail", "")}. '
-                                    f'Сплю 10 секунд...')
-                                await asyncio.sleep(10)
-                                profile_update_timer = -1
+                                    f'Сплю 15 секунд...')
+                                shop_cooldown_start = time()
                             else:
                                 logger.info(f'Успешно куплен буст {boost.icon} {boost.name}! ({boost.type})')
-                                bought = True
+                                shop_flag = True
                         else:
                             buy = await self.upgrade_boost(boost.abs_id)
-                            if buy.status != 200:
+                            if buy.status == 400:
+                                logger.error(f'Недостаточно кликов, чтобы купить буст! Обновляюсь и сплю 15 секунд...')
+                                profile_update_timer = -1
+                                shop_cooldown_start = time()
+                                shop_flag = True
+                            elif buy.status != 200:
                                 info = await buy.json()
                                 logger.error(
                                     f'Не удалось улучшить буст! Код ошибки: {buy.status} ({info.get("detail", "")}). '
-                                    f'Сплю 10 секунд...'
+                                    f'Сплю 15 секунд...'
                                 )
-                                await asyncio.sleep(10)
-                                profile_update_timer = -1
+                                shop_cooldown_start = time()
                             else:
                                 logger.info(f'Успешно улучшен буст {boost.icon} {boost.name}! ({boost.type})')
-                                bought = True
+                                shop_flag = True
 
-                        if bought:
-                            await self.update_profile(shop=True)
+                        if shop_flag:
+                            profile_update_timer = -1
                         # self.buy_manager.set_keys()  # Выключает менеджер бустов
 
                 if self.do_click == 1 and energy > 20 and recovery_start == -1:
@@ -290,12 +301,12 @@ class ClickerClient:
                     break
 
                 elif energy <= 20 and recovery_start == -1:
-                    logger.info(f'Энергия закончилась! Спим {recovery_time} до восстановления...')
+                    logger.warning(f'Энергия закончилась! Спим {recovery_time} до восстановления...')
                     recovery_start = time()
 
                 elif recovery_start != -1:
                     if time() - recovery_start >= recovery_time:
-                        logger.info('Восстановление энергии закончено, продолжаем работу!')
+                        logger.warning('Восстановление энергии закончено, продолжаем работу!')
                         recovery_start = -1
                         profile_update_timer = 0
 

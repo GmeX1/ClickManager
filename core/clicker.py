@@ -6,26 +6,32 @@ from time import time
 from urllib.parse import unquote
 
 import aiohttp
+from aiohttp_socks import ProxyConnector
 from loguru import logger
 from pyrogram import Client
 from pyrogram.raw.types.web_view_result_url import WebViewResultUrl
 
-from temp_vars import BASE_URL, BUY_CLICK, BUY_ENERGY, BUY_MAX_LVL, BUY_MINER, CLICKS_AMOUNT, CLICKS_SLEEP, ENC_KEY, \
-    UPDATE_FREQ, UPDATE_VAR
 from .utils.boost_classes import BoostHandler
-from .utils.decorators import request_handler
 from .utils.proxy_n_tls import get_ssl
+from temp_vars import BASE_URL, BUY_CLICK, BUY_ENERGY, BUY_MINER, CLICKS_AMOUNT, CLICKS_SLEEP, ENC_KEY, BUY_MAX_LVL, \
+    UPDATE_FREQ, UPDATE_VAR
+from .utils.decorators import request_handler
 
 
 class ClickerClient:
     """Основной клиент кликера, создаваемый по имени сессии Pyrogram."""
 
-    def __init__(self, client: Client, web_app: WebViewResultUrl):
+    def __init__(self, client: Client, web_app: WebViewResultUrl, proxy: str = None):
         """Создание клиента pyrogram, создание сессии для запросов"""
         self.client = client
+        if proxy:
+            connector = ProxyConnector.from_url(proxy)
+        else:
+            connector = None
         self.webviewApp = web_app
         self.ssl_connector = aiohttp.TCPConnector(ssl_context=get_ssl())
         self.session = aiohttp.ClientSession(
+            connector=connector,
             headers={  # TODO: Стоило бы повесить TLSv1.3
                 "Accept": "application/json, text/plain, */*",
                 "Accept-Encoding": "gzip, deflate, br",
@@ -41,9 +47,7 @@ class ClickerClient:
                 "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) "
                               "Chrome/121.0.0.0 Mobile Safari/537.36",
                 "X-Telegram-Init-Data": self.get_init_data()
-            },
-            connector=self.ssl_connector
-        )
+            })  # TODO: Слить вместе ssl и прокси
         self.buy_manager = BoostHandler()
         self.do_click = 1
 
@@ -184,6 +188,32 @@ class ClickerClient:
             'hash': hashed
         })
         return hashed, result
+
+    async def update_proxy(self, proxy: str):
+        await self.session.close()
+        connector = ProxyConnector.from_url(proxy)
+        self.session = aiohttp.ClientSession(
+            connector=connector,
+            headers={
+                "Accept": "application/json, text/plain, */*",
+                "Accept-Encoding": "gzip, deflate, br",
+                "Accept-Language": "ru-RU,ru;q=0.8,en-US;q=0.5,en;q=0.3",
+                "Connection": 'keep-alive',
+                "Host": "arbuz.betty.games",
+                "Origin": "https://arbuzapp.betty.games",
+                "Referer": "https://arbuzapp.betty.games/",
+                "Sec-Fetch-Dest": "empty",
+                "Sec-Fetch-Mode": "cors",
+                "Sec-Fetch-Site": "same-site",
+                "TE": "trailers",
+                "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) "
+                              "Chrome/121.0.0.0 Mobile Safari/537.36",
+                "X-Telegram-Init-Data": self.get_init_data()
+            })
+        if (await self.session.get('https://api.ipify.org/')).status == 200:
+            return True
+        return False
+
 
     async def run(self):  # TODO: Сделать сбор статистики за цикл работы.
         try:

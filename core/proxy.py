@@ -171,8 +171,8 @@ class ProxyHandler:
         return True
 
     def check_proxy(self, proxy: str):
+        proxy_address = f"socks4://{proxy}"
         try:
-            proxy_address = f"socks4://{proxy}"
             res = requests.get(
                 "https://api.ipify.org?format=json",
                 proxies={"http": proxy_address, "https": proxy_address},
@@ -181,15 +181,15 @@ class ProxyHandler:
             )
             res.raise_for_status()
             if self.ip not in res:
-                return proxy, True
+                return proxy_address, True
             logger.warning('Прозрачный прокси пропущен.')
-            return proxy, False
+            return proxy_address, False
         except (ConnectTimeout, SSLError, ConnectionError, ReadTimeout):
             logger.trace(f'Не удалось подключиться: {proxy}')
-            return proxy, False
+            return proxy_address, False
         except Exception as ex:
             logger.critical(f'Ошибка {ex.__class__.__name__} при проверке прокси: {ex}')
-            return proxy, False
+            return proxy_address, False
 
     def close(self):
         self.session.close()

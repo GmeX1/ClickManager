@@ -4,9 +4,10 @@ import sys
 from loguru import logger
 from core.utils.scripts import get_clients, run_client
 from temp_vars import LOG_LEVEL
-from core.proxy import AsyncProxyHandler, ProxyHandler
+from core.proxy import ProxyHandler
 
 clients, tasks, clicker_clients = list, list, list
+proxies = ProxyHandler()
 
 
 async def async_input():  # TODO: Инпут работает всего пару раз, а потом перестаёт вызываться.
@@ -36,9 +37,10 @@ async def async_input():  # TODO: Инпут работает всего пар�
 
 @logger.catch  # Должно помочь с трейсингом ошибок
 async def run_tasks():  # Код грязный. Почищу, когда разберусь с дистанционным управлением аккаунтами
-    global clients, clicker_clients, tasks
+    global clients, clicker_clients, tasks, proxies
     clients = get_clients()
-    clicker_clients = [await run_client(client) for client in clients]
+    proxies.update_proxies(proxies.get_proxies(), int(len(clients) * 1.5))
+    clicker_clients = [await run_client(client, proxies.good_proxies.pop()) for client in clients]
     tasks = [asyncio.create_task(client.run()) for client in clicker_clients]
     # tasks.append(asyncio.create_task(async_input()))  # Подключение инпута
     await asyncio.gather(*tasks)

@@ -20,7 +20,7 @@ def get_clients():
     return clients
 
 
-async def run_client(client):
+async def run_client(client, proxy=None):
     await client.start()
     raw_peer = await client.resolve_peer('wmclick_bot')
     web_app = await client.invoke(
@@ -31,4 +31,4 @@ async def run_client(client):
             from_bot_menu=False,
             url=f'{BASE_URL}/users/me'
         ))
-    return ClickerClient(client, web_app)
+    return ClickerClient(client, web_app, proxy)

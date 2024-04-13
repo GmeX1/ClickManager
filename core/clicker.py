@@ -6,49 +6,48 @@ from time import time
 from urllib.parse import unquote
 
 import aiohttp
+from aiohttp_socks import ProxyConnector
 from loguru import logger
 from pyrogram import Client
 from pyrogram.raw.types.web_view_result_url import WebViewResultUrl
 
-from temp_vars import BASE_URL, CLICKS_AMOUNT, CLICKS_SLEEP, ENC_KEY, BUY_CLICK, BUY_MINER, BUY_ENERGY, BUY_MAX_LVL
+from temp_vars import BASE_URL, BUY_CLICK, BUY_ENERGY, BUY_MINER, CLICKS_AMOUNT, CLICKS_SLEEP, ENC_KEY
 from .utils.decorators import request_handler
 
 
 class ClickerClient:
     """Основной клиент кликера, создаваемый по имени сессии Pyrogram."""
 
-    def __init__(self, client: Client, web_app: WebViewResultUrl):
+    def __init__(self, client: Client, web_app: WebViewResultUrl, proxy: str = None):
         """Создание клиента pyrogram, создание сессии для запросов"""
         self.client = client
+        if proxy:
+            connector = ProxyConnector.from_url(proxy)
+        else:
+            connector = None
         self.webviewApp = web_app
-        self.session = aiohttp.ClientSession(headers={
-            "Accept": "application/json, text/plain, */*",
-            "Accept-Encoding": "gzip, deflate, br",
-            "Accept-Language": "ru-RU,ru;q=0.8,en-US;q=0.5,en;q=0.3",
-            "Connection": 'keep-alive',
-            "Host": "arbuz.betty.games",
-            "Origin": "https://arbuzapp.betty.games",
-            "Referer": "https://arbuzapp.betty.games/",
-            "Sec-Fetch-Dest": "empty",
-            "Sec-Fetch-Mode": "cors",
-            "Sec-Fetch-Site": "same-site",
-            "TE": "trailers",
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 "
-                          "Mobile Safari/537.36",
-            "X-Telegram-Init-Data": self.get_init_data()
-        })
+        self.session = aiohttp.ClientSession(
+            connector=connector,
+            headers={
+                "Accept": "application/json, text/plain, */*",
+                "Accept-Encoding": "gzip, deflate, br",
+                "Accept-Language": "ru-RU,ru;q=0.8,en-US;q=0.5,en;q=0.3",
+                "Connection": 'keep-alive',
+                "Host": "arbuz.betty.games",
+                "Origin": "https://arbuzapp.betty.games",
+                "Referer": "https://arbuzapp.betty.games/",
+                "Sec-Fetch-Dest": "empty",
+                "Sec-Fetch-Mode": "cors",
+                "Sec-Fetch-Site": "same-site",
+                "TE": "trailers",
+                "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) "
+                              "Chrome/121.0.0.0 Mobile Safari/537.36",
+                "X-Telegram-Init-Data": self.get_init_data()
+            })
         self.buy_type = {
             'CLICK_POWER': BUY_CLICK,
             'MINER': BUY_MINER,
             'ENERGY_RECOVERY': BUY_ENERGY
-        }
-        self.buy_listing = {
-            'CLICK_POWER': list(),
-            'CLICK_POWER_MINS': list(),
-            'MINER': list(),
-            'MINER_MINS': list(),
-            'ENERGY_RECOVERY': list(),
-            'ENERGY_RECOVERY_MINS': list()
         }
         self.do_click = 1
 
@@ -129,6 +128,31 @@ class ClickerClient:
         })
         return hashed, result
 
+    async def update_proxy(self, proxy: str):
+        await self.session.close()
+        connector = ProxyConnector.from_url(proxy)
+        self.session = aiohttp.ClientSession(
+            connector=connector,
+            headers={
+                "Accept": "application/json, text/plain, */*",
+                "Accept-Encoding": "gzip, deflate, br",
+                "Accept-Language": "ru-RU,ru;q=0.8,en-US;q=0.5,en;q=0.3",
+                "Connection": 'keep-alive',
+                "Host": "arbuz.betty.games",
+                "Origin": "https://arbuzapp.betty.games",
+                "Referer": "https://arbuzapp.betty.games/",
+                "Sec-Fetch-Dest": "empty",
+                "Sec-Fetch-Mode": "cors",
+                "Sec-Fetch-Site": "same-site",
+                "TE": "trailers",
+                "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) "
+                              "Chrome/121.0.0.0 Mobile Safari/537.36",
+                "X-Telegram-Init-Data": self.get_init_data()
+            })
+        if (await self.session.get('https://api.ipify.org/')).status == 200:
+            return True
+        return False
+
     async def run(self):  # TODO: Сделать сбор статистики за цикл работы.
         try:
             profile = await self.get_profile_request()
@@ -155,7 +179,7 @@ class ClickerClient:
             logger.debug(f'Текущая информация о профиле:\nЭнергия: {energy}\nВремя восстановления энергии:'
                          f'{recovery_time}\nБаланс:{balance}\nВремя последнего клика:{last_click}')
             while True:
-                if any(self.buy_type.values()):  # TODO: Система авто покупок + Авто обновление баланса
+                if any(self.buy_type.values()):
                     pass
 
                 if self.do_click == 1 and energy > 10 and recovery_start == -1:
@@ -190,11 +214,12 @@ class ClickerClient:
                     await logger.complete()
                     await self.stop()
                     break
-
-        except Exception as ex:
-            logger.exception(f'Неизвестная ошибка от {ex.__class__.__name__}: {ex}')
-            await logger.complete()
-            await self.stop()
+        except RuntimeError:
+            pass
+        # except Exception as ex:
+        #     logger.exception(f'Неизвестная ошибка от {ex.__class__.__name__}: {ex}')
+        #     await logger.complete()
+        #     await self.stop()
 
     async def stop(self):
         await self.session.close()

@@ -6,7 +6,7 @@ from loguru import logger
 from core.utils.scripts import get_clients, run_client
 from temp_vars import LOG_LEVEL
 
-clients, tasks, clicker_clients = list, list, list
+clients, tasks, clicker_clients = list(), list(), list()
 
 
 async def async_input():  # TODO: Инпут работает всего пару раз, а потом перестаёт вызываться.
@@ -16,7 +16,6 @@ async def async_input():  # TODO: Инпут работает всего пар�
     """
     global clicker_clients
     loop = asyncio.get_event_loop()
-    msg = await loop.run_in_executor(None, input, 'Пичатаи: ')
     while True:
         msg = await loop.run_in_executor(None, input, 'Пичатаи: ')
         if msg == 'stop':
@@ -29,7 +28,7 @@ async def async_input():  # TODO: Инпут работает всего пар�
             for client in clicker_clients:
                 client.do_click = 2
             break
-        loop = asyncio.get_event_loop()
+        await asyncio.sleep(0.05)
     print('return')
     return None
 
@@ -43,9 +42,9 @@ async def run_tasks():  # Код грязный. Почищу, когда раз
     # tasks.append(asyncio.create_task(async_input()))  # Подключение инпута
     await asyncio.gather(*tasks)
 
-
+# TODO: ввести ядро под каждую сессию в threading
 if __name__ == '__main__':
     logger.remove()
     logger.add(sys.stderr, level=LOG_LEVEL, enqueue=True, colorize=True)
-    logger.add('debug_log.log', level='INFO', enqueue=True, rotation='10 MB')
+    logger.add('debug_log.log', level='INFO', enqueue=True, retention='2 days')
     asyncio.run(run_tasks())

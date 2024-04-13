@@ -2,9 +2,9 @@ import asyncio
 import sys
 
 from loguru import logger
-
 from core.utils.scripts import get_clients, run_client
 from temp_vars import LOG_LEVEL
+from core.proxy import AsyncProxyHandler, ProxyHandler
 
 clients, tasks, clicker_clients = list, list, list
 
@@ -47,5 +47,6 @@ async def run_tasks():  # Код грязный. Почищу, когда раз
 if __name__ == '__main__':
     logger.remove()
     logger.add(sys.stderr, level=LOG_LEVEL, enqueue=True, colorize=True)
-    logger.add('debug_log.log', level='INFO', enqueue=True, rotation='10 MB')
+    logger.add('debug_log.log', level='INFO', enqueue=True, retention='3 days')
+    # asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     asyncio.run(run_tasks())

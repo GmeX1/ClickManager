@@ -21,7 +21,7 @@ class ClickerClient:
         """Создание клиента pyrogram, создание сессии для запросов"""
         self.client = client
         self.webviewApp = web_app
-        self.session = aiohttp.ClientSession(headers={  # TODO: Стоило бы повесить TLSv1.3
+        self.session = aiohttp.ClientSession(headers={
             "Accept": "application/json, text/plain, */*",
             "Accept-Encoding": "gzip, deflate, br",
             "Accept-Language": "ru-RU,ru;q=0.8,en-US;q=0.5,en;q=0.3",

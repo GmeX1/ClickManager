@@ -17,7 +17,7 @@ ON = InlineKeyboardMarkup(inline_keyboard=[
 
 Settings = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton(text='Клики', callback_data='Klik')],
-    [InlineKeyboardButton(text='Авто кили', callback_data='Avto_klik')],
+    [InlineKeyboardButton(text='Авто клики', callback_data='Avto_klik')],
     [InlineKeyboardButton(text='Энергия', callback_data='Energy')],
     [InlineKeyboardButton(text='Максимальный уровень прокачки', callback_data='Max_lvl')]
 ])

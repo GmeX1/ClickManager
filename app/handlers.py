@@ -1,13 +1,15 @@
 from aiogram import F, Router
-from aiogram.filters import CommandStart, Command
-from aiogram.types import Message, CallbackQuery
+from aiogram.filters import Command, CommandStart, CommandObject
 from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import StatesGroup, State
-import app.key as k
-from Private import api_id, api_hash
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.types import CallbackQuery, Message
+from loguru import logger
 from pyrogram import Client
-from db_py import Settings,check_user_exists
 from pyrogram.errors.exceptions import bad_request_400
+
+import app.key as k
+from Private import api_hash, api_id
+from db.functions import db_add_user, db_check_user_exists, db_update_user
 
 router = Router()
 
@@ -27,24 +29,24 @@ class Max(StatesGroup):
 
 @router.message(CommandStart())
 async def cmd_start(message: Message):
-    if not check_user_exists(message.from_user.id):
-
-    # if str(message.from_user.id) not in white_liste:
-    #     swoi = message.text[7:]
-    #     print(white_liste, message.from_user.id, swoi)
-    #     if str(swoi) in white_liste:
-    #         if str(swoi) != str(message.from_user.id):
-    #             with open('white_liste.txt', 'w') as file:
-    #                 file.write(swoi + '\n')
-    #                 file.write(str(message.from_user.id))
-    #                 await message.reply(f'Привет. \nТвой ID:{message.from_user.id} ты есть в нашей системе.\n'
-    #                                     f'Тебе осталось зарегистрироваться по команде /reg', reply_markup=k.main)
-    #         else:
-    #             await message.answer(
-    #                 'По собственной ссылке регистрироваться нельзя. Или вы не зарегистрированы в системе')
-    else:
+    if await db_check_user_exists(message.from_user.id):
         await message.reply(f'Привет. \nТвой ID:{message.from_user.id} ты есть в нашей системе.\n'
                             f'Тебе осталось зарегистрироваться по команде /reg', reply_markup=k.main)
+    else:
+        logger.warning(f'Неизвестный пользователь: {message.from_user.username} ({message.from_user.id})')
+
+
+@router.message(Command('add'))  # Пока что добавление в систему происходит напрямую
+async def add_user(message: Message, command: CommandObject):
+    user_id = command.args
+    if type(user_id) != int:
+        user_id = int(user_id)
+        logger.info(user_id)
+    result = await db_add_user('ref', user_id)
+    if result:
+        await message.answer('✅Пользователь успешно добавлен!')
+    else:
+        await message.answer('❌Не удалось добавить пользователя')
 
 
 @router.message(Command('help'))
@@ -134,14 +136,22 @@ async def klik(callback: CallbackQuery):
 
 @router.callback_query(F.data == 'YesK')
 async def YesK(callback: CallbackQuery):
-    await callback.answer('Опперация была успешно выполнена')
+    change = await db_update_user(callback.from_user.id, {'BUY_CLICK': True})
+    if change:
+        await callback.answer('Операция была успешно выполнена.')
+    else:
+        await callback.answer('Не удалось совершить операцию!')
     await callback.message.edit_text('Выберите действие: ', reply_markup=k.Settings)
     pass
 
 
 @router.callback_query(F.data == 'NoK')
 async def NoK(callback: CallbackQuery):
-    await callback.answer('Опперация была успешно выполнена')
+    change = await db_update_user(callback.from_user.id, {'BUY_CLICK': False})
+    if change:
+        await callback.answer('Операция была успешно выполнена.')
+    else:
+        await callback.answer('Не удалось совершить операцию!')
     await callback.message.edit_text('Выберите действие: ', reply_markup=k.Settings)
     pass
 
@@ -155,14 +165,22 @@ async def Avto_klik(callback: CallbackQuery):
 
 @router.callback_query(F.data == 'YesA')
 async def YesA(callback: CallbackQuery):
-    await callback.answer('Опперация была успешно выполнена')
+    change = await db_update_user(callback.from_user.id, {'BUY_MINER': True})
+    if change:
+        await callback.answer('Операция была успешно выполнена.')
+    else:
+        await callback.answer('Не удалось совершить операцию!')
     await callback.message.edit_text('Выберите действие: ', reply_markup=k.Settings)
     pass
 
 
 @router.callback_query(F.data == 'NoA')
 async def NoA(callback: CallbackQuery):
-    await callback.answer('Опперация была успешно выполнена')
+    change = await db_update_user(callback.from_user.id, {'BUY_MINER': False})
+    if change:
+        await callback.answer('Операция была успешно выполнена.')
+    else:
+        await callback.answer('Не удалось совершить операцию!')
     await callback.message.edit_text('Выберите действие: ', reply_markup=k.Settings)
     pass
 

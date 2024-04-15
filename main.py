@@ -1,18 +1,19 @@
 import asyncio
 import sys
+from asyncio import IncompleteReadError
 
 from loguru import logger
 from python_socks import ProxyConnectionError
+
 from core.proxy import ProxyHandler
 from core.utils.scripts import get_clients, run_client
 from temp_vars import LOG_LEVEL
-from asyncio import IncompleteReadError
 
 clients, tasks, clicker_clients = list(), list(), list()
 proxies = ProxyHandler()
 
 
-async def async_input():  # TODO: Инпут работает всего пару раз, а потом перестаёт вызываться.
+async def async_input():  # Инпут работает всего пару раз, а потом перестаёт вызываться.
     """
     ВНИМАНИЕ!!!! Инпут работает очень криво, в связи с чем команду можно вводить всего несколько раз :(
     Использовать ТОЛЬКО в качестве примера того, как можно соеденить ТГ бота с клиентами (количество не важно)

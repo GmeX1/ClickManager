@@ -3,12 +3,16 @@ from random import shuffle
 
 import aiohttp
 import requests
-from requests.exceptions import SSLError, ConnectionError, ConnectTimeout, ReadTimeout
 from aiohttp_socks import ProxyConnectionError, ProxyConnector, ProxyTimeoutError
 from loguru import logger
-from time import time
+from requests.exceptions import ConnectTimeout, ConnectionError, ReadTimeout, SSLError
+
 
 class AsyncProxyHandler:
+    """Использование данного класса нежелательно: многопоточная версия хэндлера работает значительно быстрее и
+    стабильнее. Очень мала вероятность того, что кто-то продолжит работать над даннным классом, поэтому его можно
+    считать устаревшим."""
+
     def __init__(self):
         self.url = ('https://poeai.click/proxy.php/v2/?request=getproxies&protocol=socks4&timeout=5000&country=all&ssl'
                     '=all&anonymity=elite')
@@ -75,8 +79,6 @@ class AsyncProxyHandler:
         await logger.complete()
         return True
 
-    # TODO: Переписать под multithreading. Под ночь сие "чудо" перестало работать. Вообще.
-    # TODO: Обрабатывать состояние судей
     async def check_proxy(self, address):
         try:
             copy_list = self.judges.copy()
@@ -207,7 +209,6 @@ class ProxyHandler:
 
     def close(self):
         self.session.close()
-
 
 # if __name__ == '__main__':  # Для проверки класса прокси
 #     handler = ProxyHandler()

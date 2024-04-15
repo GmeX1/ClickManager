@@ -137,7 +137,6 @@ class ClickerClient:
             'recovery_time': recovery_time
         }
 
-    # TODO: Логирование + исключения
     async def update_boosts(self, log=False):
         all_response = await self.get_boosts_all()
         all_data = await all_response.json()
@@ -163,7 +162,7 @@ class ClickerClient:
             logger.critical('В json магазина отсутствует список товаров!')
         await logger.complete()
 
-    async def update_boosts_stats(self, boost_types: list[str] = None):  # TODO: обновление данных после покупки
+    async def update_boosts_stats(self, boost_types: list[str] = None):
         self.buy_manager.update_stats(boost_types=boost_types, level=BUY_MAX_LVL)
 
     @request_handler()

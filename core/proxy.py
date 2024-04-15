@@ -157,7 +157,7 @@ class ProxyHandler:
                 logger.critical(f'Не удалось получить прокси! Код: {request.status_code} ({request.text})')
                 return None
             proxies = list(map(lambda x: x.split('://')[-1], request.text.split()))
-            shuffle(proxies)
+        shuffle(proxies)
         return proxies
 
     def get_proxy(self):

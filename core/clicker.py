@@ -11,11 +11,11 @@ from loguru import logger
 from pyrogram import Client
 from pyrogram.raw.types.web_view_result_url import WebViewResultUrl
 
-from .utils.boost_classes import BoostHandler
-from .utils.proxy_n_tls import get_ssl
-from temp_vars import BASE_URL, BUY_CLICK, BUY_ENERGY, BUY_MINER, CLICKS_AMOUNT, CLICKS_SLEEP, ENC_KEY, BUY_MAX_LVL, \
+from temp_vars import BASE_URL, BUY_CLICK, BUY_ENERGY, BUY_MAX_LVL, BUY_MINER, CLICKS_AMOUNT, CLICKS_SLEEP, ENC_KEY, \
     UPDATE_FREQ, UPDATE_VAR
+from .utils.boost_classes import BoostHandler
 from .utils.decorators import request_handler
+from .utils.proxy_n_tls import get_ssl
 
 
 class ClickerClient:
@@ -25,14 +25,13 @@ class ClickerClient:
         """Создание клиента pyrogram, создание сессии для запросов"""
         self.client = client
         if proxy:
-            connector = ProxyConnector.from_url(proxy)
+            self.connector = ProxyConnector.from_url(proxy, ssl_context=get_ssl())
         else:
-            connector = None
+            self.connector = aiohttp.TCPConnector(ssl_context=get_ssl())
         self.webviewApp = web_app
-        self.ssl_connector = aiohttp.TCPConnector(ssl_context=get_ssl())
         self.session = aiohttp.ClientSession(
-            connector=connector,
-            headers={  # TODO: Стоило бы повесить TLSv1.3
+            connector=self.connector,
+            headers={
                 "Accept": "application/json, text/plain, */*",
                 "Accept-Encoding": "gzip, deflate, br",
                 "Accept-Language": "ru-RU,ru;q=0.8,en-US;q=0.5,en;q=0.3",
@@ -47,7 +46,7 @@ class ClickerClient:
                 "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) "
                               "Chrome/121.0.0.0 Mobile Safari/537.36",
                 "X-Telegram-Init-Data": self.get_init_data()
-            })  # TODO: Слить вместе ssl и прокси
+            })
         self.buy_manager = BoostHandler()
         self.do_click = 1
 
@@ -59,6 +58,37 @@ class ClickerClient:
         data = data.replace(user, unquote(user))
         return data
 
+    async def update_proxy(self, proxy: str):
+        await self.connector.close()
+        await self.session.close()
+        self.connector = ProxyConnector.from_url(proxy, ssl_context=get_ssl())
+        logger.warning('Creating session')
+        self.session = aiohttp.ClientSession(
+            # timeout=ClientTimeout(10),
+            connector=self.connector,
+            headers={
+                "Accept": "application/json, text/plain, */*",
+                "Accept-Encoding": "gzip, deflate, br",
+                "Accept-Language": "ru-RU,ru;q=0.8,en-US;q=0.5,en;q=0.3",
+                "Connection": 'keep-alive',
+                "Host": "arbuz.betty.games",
+                "Origin": "https://arbuzapp.betty.games",
+                "Referer": "https://arbuzapp.betty.games/",
+                "Sec-Fetch-Dest": "empty",
+                "Sec-Fetch-Mode": "cors",
+                "Sec-Fetch-Site": "same-site",
+                "TE": "trailers",
+                "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) "
+                              "Chrome/121.0.0.0 Mobile Safari/537.36",
+                "X-Telegram-Init-Data": self.get_init_data()
+            })
+        test = await self.session.get('https://arbuzapp.betty.games/api/event')  # TODO: функционал ивентов
+        logger.warning(test)
+        if test.status == 200:
+            return True
+        logger.error(f'Ошибка {test.status} при обновлении прокси: {await test.text()}')
+        return False
+
     async def update_profile(self, shop: bool = False, shop_keys: bool = False):
         """
         Общая функция для обновления данных
@@ -67,6 +97,7 @@ class ClickerClient:
         :return: исключение при ошибке ИЛИ словарь с необходимыми значениями
         """
         profile_request = await self.get_profile_request()
+        logger.debug(await profile_request.text())
         profile = await profile_request.json()
         if profile_request is None:
             return Exception('Не удалось получить профиль!')
@@ -189,163 +220,139 @@ class ClickerClient:
         })
         return hashed, result
 
-    async def update_proxy(self, proxy: str):
-        await self.session.close()
-        connector = ProxyConnector.from_url(proxy)
-        self.session = aiohttp.ClientSession(
-            connector=connector,
-            headers={
-                "Accept": "application/json, text/plain, */*",
-                "Accept-Encoding": "gzip, deflate, br",
-                "Accept-Language": "ru-RU,ru;q=0.8,en-US;q=0.5,en;q=0.3",
-                "Connection": 'keep-alive',
-                "Host": "arbuz.betty.games",
-                "Origin": "https://arbuzapp.betty.games",
-                "Referer": "https://arbuzapp.betty.games/",
-                "Sec-Fetch-Dest": "empty",
-                "Sec-Fetch-Mode": "cors",
-                "Sec-Fetch-Site": "same-site",
-                "TE": "trailers",
-                "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) "
-                              "Chrome/121.0.0.0 Mobile Safari/537.36",
-                "X-Telegram-Init-Data": self.get_init_data()
-            })
-        if (await self.session.get('https://api.ipify.org/')).status == 200:
-            return True
-        return False
-
-
-    async def run(self):  # TODO: Сделать сбор статистики за цикл работы.
+    async def run_try(self):
         try:
-            # profile_data = await self.update_profile(shop=True, shop_keys=True)
-            profile_data = await self.update_profile(shop=True, shop_keys=True)
-            if isinstance(profile_data, Exception):
-                raise profile_data
-            profile = profile_data['profile']
-            energy = profile_data['energy']
-            balance = profile_data['balance']
-            last_click = profile_data['last_click']
-
-            recovery_time = profile_data['recovery_time']
-            recovery_start = -1
-            profile_update_timer = UPDATE_FREQ + random.uniform(-UPDATE_VAR, UPDATE_VAR)
-            profile_update_start = time()
-            shop_cooldown_start = time() - 10
-
-            # await self.update_boosts(log=False)
-
-            logger.info('Данные магазина успешно получены')
-            logger.debug(f'Текущая информация о профиле:\nЭнергия: {energy}\nВремя восстановления энергии:'
-                         f'{recovery_time}\nБаланс:{balance}\nВремя последнего клика:{last_click}')
-            while True:
-                profile_time = time() - profile_update_start
-                if profile_time >= profile_update_timer:
-                    if profile_update_timer == -1:
-                        shop = True
-                    else:
-                        shop = False
-
-                    profile_data = await self.update_profile(shop=shop)
-                    if isinstance(profile_data, Exception):
-                        raise profile_data
-
-                    profile = profile_data['profile']
-                    energy = profile_data['energy']
-                    balance = profile_data['balance']
-                    last_click = profile_data['last_click']
-
-                    recovery_time = profile_data['recovery_time']
-                    profile_update_timer = UPDATE_FREQ + random.uniform(-UPDATE_VAR, UPDATE_VAR)
-                    profile_update_start = time()
-
-                    logger.debug('Информация о профиле успешно обновлена.')
-                    await logger.complete()
-
-                if self.buy_manager.is_enabled():
-                    shop_cooldown = time() - shop_cooldown_start
-                    if self.buy_manager.get_min_price() < balance and profile_time > 2 and shop_cooldown > 15:
-                        boost = self.buy_manager.get_min_boost()
-                        logger.debug(f'MIN BOOST: {boost}')
-
-                        shop_flag = False
-                        if boost.level == -1:
-                            buy = await self.buy_boost(boost.id)
-                            if buy.status == 400:
-                                logger.error(f'Недостаточно кликов, чтобы купить буст! Обновляюсь и сплю 15 секунд...')
-                                profile_update_timer = -1
-                                shop_cooldown_start = time()
-                                shop_flag = True
-                            elif buy.status != 200:
-                                info = await buy.json()
-                                logger.error(
-                                    f'Не удалось купить буст! Код ошибки: {buy.status} ({info.get("detail", "")}. '
-                                    f'Сплю 15 секунд...')
-                                shop_cooldown_start = time()
-                            else:
-                                logger.info(f'Успешно куплен буст {boost.icon} {boost.name}! ({boost.type})')
-                                shop_flag = True
-                        else:
-                            buy = await self.upgrade_boost(boost.abs_id)
-                            if buy.status == 400:
-                                logger.error(f'Недостаточно кликов, чтобы купить буст! Обновляюсь и сплю 15 секунд...')
-                                profile_update_timer = -1
-                                shop_cooldown_start = time()
-                                shop_flag = True
-                            elif buy.status != 200:
-                                info = await buy.json()
-                                logger.error(
-                                    f'Не удалось улучшить буст! Код ошибки: {buy.status} ({info.get("detail", "")}). '
-                                    f'Сплю 15 секунд...'
-                                )
-                                shop_cooldown_start = time()
-                            else:
-                                logger.info(f'Успешно улучшен буст {boost.icon} {boost.name}! ({boost.type})')
-                                shop_flag = True
-
-                        if shop_flag:
-                            profile_update_timer = -1
-                        # self.buy_manager.set_keys()  # Выключает менеджер бустов
-
-                if self.do_click == 1 and energy > 20 and recovery_start == -1:
-                    count = random.randint(CLICKS_AMOUNT[0], min(CLICKS_AMOUNT[1], int(energy)))
-                    hashed, click = await self.click(count, last_click)
-                    if click.status != 200:
-                        logger.error(f'Не удалось сделать клик! Код ошибки: {click.status}. Сплю 30 секунд...')
-                        await asyncio.sleep(30)
-                    else:
-                        click = await click.json()
-                        energy = click.get('currentEnergy', 0)
-                        last_click = click.get('lastClickSeconds', 0)
-                        sleep_time = random.randint(*CLICKS_SLEEP)
-
-                        logger.info(
-                            f'Клики ({count}) успешно отправлены!  |  {energy}⚡ | +{click.get("count", 0)}🍉  |  '
-                            f'HASH: {hashed}')
-                        logger.info(f'Спим {sleep_time} секунд после клика...')
-                        await asyncio.sleep(random.randint(*CLICKS_SLEEP))
-
-                elif self.do_click == 2:
-                    logger.info(f'Останавливаем клиент {profile["id"]}')
-                    await logger.complete()
-                    await self.stop()
-                    break
-
-                elif energy <= 20 and recovery_start == -1:
-                    logger.warning(f'Энергия закончилась! Спим {recovery_time} до восстановления...')
-                    recovery_start = time()
-
-                elif recovery_start != -1:
-                    if time() - recovery_start >= recovery_time:
-                        logger.warning('Восстановление энергии закончено, продолжаем работу!')
-                        recovery_start = -1
-                        profile_update_timer = 0
-
+            result = self.run()
+            return result
         except Exception as ex:
             logger.exception(f'Неизвестная ошибка от {ex.__class__.__name__}: {ex}')
             await logger.complete()
             await self.stop()
 
+    async def run(self):  # TODO: Сделать сбор статистики за цикл работы.
+        profile_data = await self.update_profile(shop=True, shop_keys=True)
+        if isinstance(profile_data, Exception):
+            raise profile_data
+        profile = profile_data['profile']
+        energy = profile_data['energy']
+        balance = profile_data['balance']
+        last_click = profile_data['last_click']
+
+        recovery_time = profile_data['recovery_time']
+        recovery_start = -1
+        profile_update_timer = UPDATE_FREQ + random.uniform(-UPDATE_VAR, UPDATE_VAR)
+        profile_update_start = time()
+        shop_cooldown_start = time() - 10
+
+        # await self.update_boosts(log=False)
+
+        logger.info('Данные магазина успешно получены')
+        logger.debug(f'Текущая информация о профиле:\nЭнергия: {energy}\nВремя восстановления энергии:'
+                     f'{recovery_time}\nБаланс:{balance}\nВремя последнего клика:{last_click}')
+        while True:
+            profile_time = time() - profile_update_start
+            if profile_time >= profile_update_timer:
+                if profile_update_timer == -1:
+                    shop = True
+                else:
+                    shop = False
+
+                profile_data = await self.update_profile(shop=shop)
+                if isinstance(profile_data, Exception):
+                    raise profile_data
+
+                profile = profile_data['profile']
+                energy = profile_data['energy']
+                balance = profile_data['balance']
+                last_click = profile_data['last_click']
+
+                recovery_time = profile_data['recovery_time']
+                profile_update_timer = UPDATE_FREQ + random.uniform(-UPDATE_VAR, UPDATE_VAR)
+                profile_update_start = time()
+
+                logger.debug('Информация о профиле успешно обновлена.')
+                await logger.complete()
+
+            if self.buy_manager.is_enabled():
+                shop_cooldown = time() - shop_cooldown_start
+                if self.buy_manager.get_min_price() < balance and profile_time > 2 and shop_cooldown > 15:
+                    boost = self.buy_manager.get_min_boost()
+                    logger.debug(f'MIN BOOST: {boost}')
+
+                    shop_flag = False
+                    if boost.level == -1:
+                        buy = await self.buy_boost(boost.id)
+                        if buy.status == 400:
+                            logger.error(f'Недостаточно кликов, чтобы купить буст! Обновляюсь и сплю 15 секунд...')
+                            profile_update_timer = -1
+                            shop_cooldown_start = time()
+                            shop_flag = True
+                        elif buy.status != 200:
+                            info = await buy.json()
+                            logger.error(
+                                f'Не удалось купить буст! Код ошибки: {buy.status} ({info.get("detail", "")}. '
+                                f'Сплю 15 секунд...')
+                            shop_cooldown_start = time()
+                        else:
+                            logger.info(f'Успешно куплен буст {boost.icon} {boost.name}! ({boost.type})')
+                            shop_flag = True
+                    else:
+                        buy = await self.upgrade_boost(boost.abs_id)
+                        if buy.status == 400:
+                            logger.error(f'Недостаточно кликов, чтобы купить буст! Обновляюсь и сплю 15 секунд...')
+                            profile_update_timer = -1
+                            shop_cooldown_start = time()
+                            shop_flag = True
+                        elif buy.status != 200:
+                            info = await buy.json()
+                            logger.error(
+                                f'Не удалось улучшить буст! Код ошибки: {buy.status} ({info.get("detail", "")}). '
+                                f'Сплю 15 секунд...'
+                            )
+                            shop_cooldown_start = time()
+                        else:
+                            logger.info(f'Успешно улучшен буст {boost.icon} {boost.name}! ({boost.type})')
+                            shop_flag = True
+
+                    if shop_flag:
+                        profile_update_timer = -1
+                    # self.buy_manager.set_keys()  # Выключает менеджер бустов
+
+            if self.do_click == 1 and energy > 20 and recovery_start == -1:
+                count = random.randint(CLICKS_AMOUNT[0], min(CLICKS_AMOUNT[1], int(energy)))
+                hashed, click = await self.click(count, last_click)
+                if click.status != 200:
+                    logger.error(f'Не удалось сделать клик! Код ошибки: {click.status}. Сплю 30 секунд...')
+                    await asyncio.sleep(30)
+                else:
+                    click = await click.json()
+                    energy = click.get('currentEnergy', 0)
+                    last_click = click.get('lastClickSeconds', 0)
+                    sleep_time = random.randint(*CLICKS_SLEEP)
+
+                    logger.info(
+                        f'Клики ({count}) успешно отправлены!  |  {energy}⚡ | +{click.get("count", 0)}🍉  |  '
+                        f'HASH: {hashed}')
+                    logger.info(f'Спим {sleep_time} секунд после клика...')
+                    await asyncio.sleep(random.randint(*CLICKS_SLEEP))
+
+            elif self.do_click == 2:
+                logger.info(f'Останавливаем клиент {profile["id"]}')
+                await logger.complete()
+                await self.stop()
+                break
+
+            elif energy <= 20 and recovery_start == -1:
+                logger.warning(f'Энергия закончилась! Спим {recovery_time} до восстановления...')
+                recovery_start = time()
+
+            elif recovery_start != -1:
+                if time() - recovery_start >= recovery_time:
+                    logger.warning('Восстановление энергии закончено, продолжаем работу!')
+                    recovery_start = -1
+                    profile_update_timer = 0
+
     async def stop(self):
-        await self.ssl_connector.close()
+        await self.connector.close()
         await self.session.close()
         await self.client.stop()

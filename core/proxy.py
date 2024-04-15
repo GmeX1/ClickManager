@@ -119,6 +119,7 @@ class ProxyHandler:
             "Connection": "keep-alive",
         }
         self.good_proxies = set()
+        self.blacklist = set()
         self.judges = [
             'http://httpbin.org/get?show_env',
             'https://httpbin.org/get?show_env',
@@ -154,17 +155,28 @@ class ProxyHandler:
                 logger.critical(f'Не удалось получить прокси! Код: {request.status_code} ({request.text})')
                 return None
             proxies = list(map(lambda x: x.split('://')[-1], request.text.split()))
+            shuffle(proxies)
         return proxies
 
-    def update_proxies(self, proxies: list[str], amount: int = 10):  # TODO: Перепроверять старые прокси
+    def get_proxy(self):
+        if len(self.good_proxies) > 0:
+            proxy = self.good_proxies.pop()
+            self.blacklist.add(proxy)
+            return proxy
+        return None
+
+    def update_proxies(self, proxies: list[str], amount: int = 10):
         if self.ip is None:
             self.get_my_ip()
 
-        with multiprocessing.Pool() as p:
+        proxies.extend(list(self.good_proxies))
+        self.good_proxies = set()
+        with multiprocessing.Pool() as p:  # TODO: Python рекомендует использовать concurrent.futures (переписать код)
             for proxy_addr, result in p.imap_unordered(self.check_proxy, proxies, chunksize=8):
                 if result:
                     self.good_proxies.add(proxy_addr)
                 if len(self.good_proxies) >= amount:
+                    p.terminate()
                     break
 
         logger.debug(f'Хорошие прокси: {self.good_proxies}')
@@ -172,6 +184,8 @@ class ProxyHandler:
 
     def check_proxy(self, proxy: str):
         proxy_address = f"socks4://{proxy}"
+        if proxy_address in self.blacklist:
+            return proxy_address, False
         try:
             res = requests.get(
                 "https://api.ipify.org?format=json",

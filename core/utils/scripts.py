@@ -2,7 +2,6 @@ import glob
 
 from pyrogram import Client
 from pyrogram.raw.functions.messages import RequestWebView
-
 from core.clicker import ClickerClient
 from temp_vars import BASE_URL
 
@@ -10,7 +9,6 @@ from temp_vars import BASE_URL
 def get_session_names():
     session_names = glob.glob('*.session')
     session_names = list(map(lambda x: x.split('\\')[-1].split('.')[0], session_names))
-    # session_names = list(map(lambda x: x.split('.')[0], session_names))
     return session_names
 
 

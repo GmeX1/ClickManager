@@ -6,7 +6,7 @@ from aiogram.fsm.state import StatesGroup, State
 import app.key as k
 from Private import api_id, api_hash
 from pyrogram import Client
-from temp_vars import BUY_MAX_LVL, BUY_CLICK, BUY_MINER, BUY_ENERGY
+from db_py import Settings,check_user_exists
 from pyrogram.errors.exceptions import bad_request_400
 
 router = Router()
@@ -27,22 +27,21 @@ class Max(StatesGroup):
 
 @router.message(CommandStart())
 async def cmd_start(message: Message):
-    with open('white_liste.txt') as file:
-        white_liste = [str(i.replace('\n', '')) for i in file.readlines()]
+    if not check_user_exists(message.from_user.id):
 
-    if str(message.from_user.id) not in white_liste:
-        swoi = message.text[7:]
-        print(white_liste, message.from_user.id, swoi)
-        if str(swoi) in white_liste:
-            if str(swoi) != str(message.from_user.id):
-                with open('white_liste.txt', 'w') as file:
-                    file.write(swoi + '\n')
-                    file.write(str(message.from_user.id))
-                    await message.reply(f'Привет. \nТвой ID:{message.from_user.id} ты есть в нашей системе.\n'
-                                        f'Тебе осталось зарегистрироваться по команде /reg', reply_markup=k.main)
-            else:
-                await message.answer(
-                    'По собственной ссылке регистрироваться нельзя. Или вы не зарегистрированы в системе')
+    # if str(message.from_user.id) not in white_liste:
+    #     swoi = message.text[7:]
+    #     print(white_liste, message.from_user.id, swoi)
+    #     if str(swoi) in white_liste:
+    #         if str(swoi) != str(message.from_user.id):
+    #             with open('white_liste.txt', 'w') as file:
+    #                 file.write(swoi + '\n')
+    #                 file.write(str(message.from_user.id))
+    #                 await message.reply(f'Привет. \nТвой ID:{message.from_user.id} ты есть в нашей системе.\n'
+    #                                     f'Тебе осталось зарегистрироваться по команде /reg', reply_markup=k.main)
+    #         else:
+    #             await message.answer(
+    #                 'По собственной ссылке регистрироваться нельзя. Или вы не зарегистрированы в системе')
     else:
         await message.reply(f'Привет. \nТвой ID:{message.from_user.id} ты есть в нашей системе.\n'
                             f'Тебе осталось зарегистрироваться по команде /reg', reply_markup=k.main)
@@ -117,9 +116,9 @@ async def reg_kod(message: Message, state: FSMContext):
         await message.answer('Ошибка входа. Отправьте контакт заново и перечитайте условия')
 
 
-# @router.message(F.text == '🤝Поделиться с другом')
-# async def get_ref(message: Message):
-#     await message.answer(f'Вот ваша реферальная ссылка: https://t.me/ClickManagerbot?start={message.from_user.id}')
+@router.message(F.text == '🤝Поделиться с другом')
+async def get_ref(message: Message):
+    await message.answer(f'Вот ваша реферальная ссылка: https://t.me/ClickManagerbot?start={message.from_user.id}')
 
 
 @router.message(F.text == '⚙️Настройки кликера')

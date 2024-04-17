@@ -14,7 +14,6 @@ BUY_CLICK = True  # Покупать/Улучшать клики
 BUY_MINER = False  # Покупать/Улучшать майнер
 BUY_ENERGY = True
 
-
 # TODO: выписывание чеков, сбор статистики
 '''Для автоматизации можно использовать этот код:
 client = pyrogram.Client('test',api_id,api_hash)

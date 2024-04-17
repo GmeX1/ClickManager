@@ -11,19 +11,19 @@ from loguru import logger
 from pyrogram import Client
 from pyrogram.raw.types.web_view_result_url import WebViewResultUrl
 
-from temp_vars import BASE_URL, BUY_CLICK, BUY_ENERGY, BUY_MAX_LVL, BUY_MINER, CLICKS_AMOUNT, CLICKS_SLEEP, ENC_KEY, \
-    UPDATE_FREQ, UPDATE_VAR
+from temp_vars import BASE_URL, CLICKS_AMOUNT, CLICKS_SLEEP, ENC_KEY, UPDATE_FREQ, UPDATE_VAR
 from .utils.boost_classes import BoostHandler
 from .utils.decorators import request_handler
-from .utils.proxy_n_tls import get_ssl
+from .utils.tls import get_ssl
 
 
 class ClickerClient:
     """Основной клиент кликера, создаваемый по имени сессии Pyrogram."""
 
-    def __init__(self, client: Client, web_app: WebViewResultUrl, proxy: str = None):
+    def __init__(self, client: Client, user_id: int, settings: dict, web_app: WebViewResultUrl, proxy: str = None):
         """Создание клиента pyrogram, создание сессии для запросов"""
         self.client = client
+        self.id = user_id
         if proxy:
             self.connector = ProxyConnector.from_url(proxy, ssl_context=get_ssl())
         else:
@@ -48,6 +48,7 @@ class ClickerClient:
                 "X-Telegram-Init-Data": self.get_init_data()
             })
         self.buy_manager = BoostHandler()
+        self.settings = settings
         self.do_click = 1
 
     def get_init_data(self):
@@ -57,6 +58,18 @@ class ClickerClient:
         user = data.split("&user=")[1].split("&auth")[0]
         data = data.replace(user, unquote(user))
         return data
+
+    async def update(self, settings: dict):
+        """Обновление настроек из БД"""
+        self.settings = {
+            'BUY_CLICK': settings['BUY_CLICK'] if 'BUY_CLICK' in settings.keys() else self.settings['BUY_CLICK'],
+            'BUY_MINER': settings['BUY_MINER'] if 'BUY_MINER' in settings.keys() else self.settings['BUY_MINER'],
+            'BUY_ENERGY': settings['BUY_ENERGY'] if 'BUY_ENERGY' in settings.keys() else self.settings['BUY_ENERGY'],
+            'BUY_MAX_LVL': settings['BUY_MAX_LVL'] if 'BUY_MAX_LVL' in settings.keys() else self.settings['BUY_MAX_LVL']
+        }
+        await self.buy_manager.set_keys(self.settings['BUY_CLICK'], self.settings['BUY_MINER'],
+                                        self.settings['BUY_ENERGY'])
+        await self.update_boosts()
 
     async def update_proxy(self, proxy: str):
         await self.connector.close()
@@ -113,7 +126,8 @@ class ClickerClient:
         recovery_time = profile.get('energyLimit', 0) // profile.get('energyBoostSum', 0) // 8
 
         if shop_keys:
-            self.buy_manager.set_keys(BUY_CLICK, BUY_MINER, BUY_ENERGY)
+            self.buy_manager.set_keys(self.settings['BUY_CLICK'], self.settings['BUY_MINER'],
+                                      self.settings['BUY_ENERGY'])
 
         if shop:
             request_all = await self.get_boosts_all()
@@ -127,7 +141,7 @@ class ClickerClient:
                 self.buy_manager.update_data(
                     json_data=json_all['items'],
                     own_data=json_own['items'],
-                    level=BUY_MAX_LVL
+                    level=self.settings['BUY_MAX_LVL']
                 )
         return {
             'profile': profile,
@@ -152,7 +166,7 @@ class ClickerClient:
             await logger.complete()
 
         if all_data is not None:
-            self.buy_manager.update_data(all_data, owned_data, level=BUY_MAX_LVL)
+            self.buy_manager.update_data(all_data, owned_data, level=self.settings['BUY_MAX_LVL'])
             if log:  # Проверить самый первый буст среди усилителей клика
                 first_boost = self.buy_manager.get_boost_by_type('CLICK_POWER').get_boost_by_id(1)
                 logger.debug(first_boost)
@@ -163,7 +177,7 @@ class ClickerClient:
         await logger.complete()
 
     async def update_boosts_stats(self, boost_types: list[str] = None):
-        self.buy_manager.update_stats(boost_types=boost_types, level=BUY_MAX_LVL)
+        self.buy_manager.update_stats(boost_types=boost_types, level=self.settings['BUY_MAX_LVL'])
 
     @request_handler()
     async def get_profile_request(self):

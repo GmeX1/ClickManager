@@ -7,6 +7,7 @@ from python_socks import ProxyConnectionError
 
 from core.proxy import ProxyHandler
 from core.utils.scripts import get_clients, run_client
+from db.functions import init
 from temp_vars import LOG_LEVEL
 
 clients, tasks, clicker_clients = list(), list(), list()
@@ -73,6 +74,7 @@ async def decorator_handler(client):  # TODO: Иногда появляется 
 @logger.catch  # Должно помочь с трейсингом ошибок
 async def run_tasks():  # Код грязный. Почищу, когда разберусь с дистанционным управлением аккаунтами
     global clients, clicker_clients, tasks, proxies
+    await init()
     clients = get_clients()
     proxies.update_proxies(proxies.get_proxies(), int(len(clients) * 1.5))
     clicker_clients = [await run_client(client, proxies.get_proxy()) for client in clients]

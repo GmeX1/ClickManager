@@ -9,4 +9,3 @@ class Settings(Model):
     BUY_CLICK = fields.BooleanField(default=False)
     BUY_MINER = fields.BooleanField(default=False)
     BUY_ENERGY = fields.BooleanField(default=False)
-    ref = fields.CharField(max_length=20)

@@ -24,7 +24,7 @@ class Reg(StatesGroup):
 
 
 class Max(StatesGroup):
-    max_ = State()
+    max_lvl = State()
 
 
 @router.message(CommandStart())
@@ -58,7 +58,7 @@ async def get_help(message: Message):
 
 
 @router.message(F.text == '🆘Помощь')
-async def get_prof(message: Message):
+async def get_help(message: Message):
     await message.answer('Можете задать вопрос админу или сообщить ему об ошибке - @Mr_Mangex')
 
 
@@ -68,25 +68,20 @@ async def get_prof(message: Message):
 
 
 @router.message(F.text == '🍉Запустить кликер на арбузы')
-async def get_prof(message: Message):
+async def get_clicker(message: Message):
     await message.reply('✅Кликер включен', reply_markup=k.OFF)
 
 
 @router.callback_query(F.data == 'OFF')
-async def back(callback: CallbackQuery):
+async def clicker_off(callback: CallbackQuery):
     await callback.answer()
     await callback.message.edit_text('Кликер выключен', reply_markup=k.ON)
 
 
 @router.callback_query(F.data == 'ON')
-async def back(callback: CallbackQuery):
+async def clicker_on(callback: CallbackQuery):
     await callback.answer()
     await callback.message.edit_text('Кликер включен', reply_markup=k.OFF)
-
-
-@router.message(F.text == 'Профиль')
-async def get_prof(message: Message):
-    await message.answer('Инф')
 
 
 @router.message(Command('reg'))
@@ -108,7 +103,7 @@ async def save_phone_number(message: Message, state: FSMContext):
 
 
 @router.message(Reg.kod)
-async def reg_kod(message: Message, state: FSMContext):
+async def reg_code(message: Message, state: FSMContext):
     try:
         data = await state.get_data()
         await data["Clients"].sign_in(data["number"], data["sCode"].phone_code_hash, message.text.replace(' ', ''))
@@ -124,19 +119,21 @@ async def get_ref(message: Message):
 
 
 @router.message(F.text == '⚙️Настройки кликера')
-async def setr_klik(message: Message):
+async def set_click(message: Message):
     await message.reply('Выберите действие: ', reply_markup=k.Settings)
 
 
 @router.callback_query(F.data == 'Klik')
-async def klik(callback: CallbackQuery):
+async def buy_click(callback: CallbackQuery):
     await callback.answer()
     await callback.message.edit_text('Включить или выключить автоматическую покупку кликов', reply_markup=k.Yes_or_No_K)
 
 
 @router.callback_query(F.data == 'YesK')
-async def YesK(callback: CallbackQuery):
+async def yes_click(callback: CallbackQuery):
+    logger.warning(callback.from_user.id)
     change = await db_update_user(callback.from_user.id, {'BUY_CLICK': True})
+    logger.warning(change)
     if change:
         await callback.answer('Операция была успешно выполнена.')
     else:
@@ -146,7 +143,7 @@ async def YesK(callback: CallbackQuery):
 
 
 @router.callback_query(F.data == 'NoK')
-async def NoK(callback: CallbackQuery):
+async def no_click(callback: CallbackQuery):
     change = await db_update_user(callback.from_user.id, {'BUY_CLICK': False})
     if change:
         await callback.answer('Операция была успешно выполнена.')
@@ -157,14 +154,14 @@ async def NoK(callback: CallbackQuery):
 
 
 @router.callback_query(F.data == 'Avto_klik')
-async def Avto_klik(callback: CallbackQuery):
+async def auto_click(callback: CallbackQuery):
     await callback.answer()
     await callback.message.edit_text('Включить или выключить автоматическую покупку Авто кликов',
                                      reply_markup=k.Yes_or_No_A)
 
 
 @router.callback_query(F.data == 'YesA')
-async def YesA(callback: CallbackQuery):
+async def yes_miner(callback: CallbackQuery):
     change = await db_update_user(callback.from_user.id, {'BUY_MINER': True})
     if change:
         await callback.answer('Операция была успешно выполнена.')
@@ -175,7 +172,7 @@ async def YesA(callback: CallbackQuery):
 
 
 @router.callback_query(F.data == 'NoA')
-async def NoA(callback: CallbackQuery):
+async def no_miner(callback: CallbackQuery):
     change = await db_update_user(callback.from_user.id, {'BUY_MINER': False})
     if change:
         await callback.answer('Операция была успешно выполнена.')
@@ -186,37 +183,48 @@ async def NoA(callback: CallbackQuery):
 
 
 @router.callback_query(F.data == 'Energy')
-async def Energy(callback: CallbackQuery):
+async def buy_energy(callback: CallbackQuery):
     await callback.answer()
     await callback.message.edit_text('Включить или выключить автоматическую покупку энергии"',
                                      reply_markup=k.Yes_or_No_E)
 
 
 @router.callback_query(F.data == 'YesE')
-async def YesE(callback: CallbackQuery):
-    await callback.answer('Опперация была успешно выполнена')
+async def yes_energy(callback: CallbackQuery):
+    change = await db_update_user(callback.from_user.id, {'BUY_ENERGY': True})
+    if change:
+        await callback.answer('Операция была успешно выполнена.')
+    else:
+        await callback.answer('Не удалось совершить операцию!')
     await callback.message.edit_text('Выберите действие: ', reply_markup=k.Settings)
     pass
 
 
 @router.callback_query(F.data == 'NoE')
-async def NoE(callback: CallbackQuery):
-    await callback.answer('Опперация была успешно выполнена')
+async def no_energy(callback: CallbackQuery):
+    change = await db_update_user(callback.from_user.id, {'BUY_ENERGY': False})
+    if change:
+        await callback.answer('Операция была успешно выполнена.')
+    else:
+        await callback.answer('Не удалось совершить операцию!')
     await callback.message.edit_text('Выберите действие: ', reply_markup=k.Settings)
     pass
 
 
 @router.callback_query(F.data == 'Max_lvl')
-async def klik(callback: CallbackQuery, state: FSMContext):
+async def buy_lvl(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
-    await callback.message.answer('Напишите какой лимит хотите поставить (цифра)')
-    await state.set_state(Max.max_)
+    await callback.message.answer('Напишите какой лимит хотите поставить (целое число)')
+    await state.set_state(Max.max_lvl)
 
 
-@router.message(Max.max_)
-async def max_message(message: Message, state: FSMContext):
+@router.message(Max.max_lvl)
+async def change_lvl(message: Message, state: FSMContext):
     try:
-        await state.update_data(max_=int(message.text))
-        await message.answer('Опперация была успешно выполнена✅')
+        value = int(message.text)
+        change = await db_update_user(message.from_user.id, {'BUY_MAX_LVL': value})
+        if change:
+            await message.answer('✅Операция была успешно выполнена.')
     except ValueError:
-        await state.set_state(Max.max_)
+        await message.answer('❌Не удалось совершить операцию! Введите число заново: ')
+        await state.set_state(Max.max_lvl)

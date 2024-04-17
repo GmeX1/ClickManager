@@ -1,10 +1,12 @@
 import asyncio
 import sys
+
 from aiogram import Bot, Dispatcher
 from loguru import logger
+
 from Private import TOKEN
 from app.handlers import router
-from db.functions import init
+from db.functions import init, db_update_user
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()

@@ -15,10 +15,10 @@ async def init():
 async def db_get_user(id_tg: int):
     existing_user = await Settings.filter(id_tg=id_tg).first()
     if existing_user:
-        logger.debug(f"Пользователь {id_tg} найден")
+        logger.trace(f"Пользователь {id_tg} найден")
         return existing_user
     else:
-        logger.debug(f"Пользователь {id_tg} НЕ найден.")
+        logger.trace(f"Пользователь {id_tg} НЕ найден.")
         return None
 
 
@@ -38,10 +38,10 @@ async def db_add_user(ref: str, id_tg: int, buy_max_lvl: int = 15, buy_click=Fal
 async def db_check_user_exists(id_tg):
     existing_user = await Settings.filter(id_tg=id_tg).first()
     if existing_user:
-        logger.debug("Пользователь с таким id_tg уже существует.")
-        return True
+        logger.trace("Пользователь с таким id_tg уже существует.")
+        return id_tg
     else:
-        logger.debug("Пользователь с таким id_tg не найден.")
+        logger.trace("Пользователь с таким id_tg не найден.")
         return False
 
 

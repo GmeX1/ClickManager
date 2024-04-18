@@ -1,3 +1,4 @@
+import asyncio
 import glob
 
 from pyrogram import Client
@@ -5,9 +6,10 @@ from pyrogram.errors import ActiveUserRequired, AuthKeyDuplicated, AuthKeyInvali
     AuthKeyUnregistered, SessionExpired, SessionPasswordNeeded, SessionRevoked, UserDeactivated, UserDeactivatedBan
 from pyrogram.raw.functions.messages import RequestWebView
 
-from core.clicker import ClickerClient
+from app.core.clicker import ClickerClient
 from db.functions import db_get_user
 from temp_vars import BASE_URL
+from db.functions import db_check_user_exists
 
 
 def get_session_names():
@@ -16,15 +18,21 @@ def get_session_names():
     return session_names
 
 
-def get_clients():
+async def get_clients(check_db=True):
+    """
+    :param check_db: проверять ли айди (имя сессии) на существование в бд
+    :return: Список клиентов Pyrogram
+    """
     sessions = get_session_names()
+    if check_db:
+        sessions = [session for session in sessions if await db_check_user_exists(session)]
     clients = [Client(session_name) for session_name in sessions]
     return clients
 
 
 async def run_client(client, proxy=None):
     await client.start()
-    user_id = (await client.get_me())['id']
+    user_id = (await client.get_me()).id
     raw_peer = await client.resolve_peer('wmclick_bot')
     web_app = await client.invoke(
         RequestWebView(

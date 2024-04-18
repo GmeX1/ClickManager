@@ -17,6 +17,7 @@ from .utils.decorators import request_handler
 from .utils.tls import get_ssl
 
 
+# TODO: Random GIFs
 class ClickerClient:
     """Основной клиент кликера, создаваемый по имени сессии Pyrogram."""
 

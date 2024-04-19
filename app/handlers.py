@@ -9,7 +9,7 @@ from pyrogram.errors.exceptions import bad_request_400
 
 import app.key as k
 from Private import api_hash, api_id
-from db.functions import db_add_user, db_check_user_exists, db_update_user
+from db.functions import db_settings_add_user, db_settings_check_user_exists, db_settings_update_user, db_callbacks_add
 
 router = Router()
 
@@ -26,22 +26,31 @@ class Max(StatesGroup):
     max_lvl = State()
 
 
+@router.message(Command('callback'))
+async def test_db_callback(message: Message, command: CommandObject):
+    """Функция для ручного создания callback запроса"""
+    user_id, column, value = command.args.split()
+    await db_callbacks_add(user_id, column, value)
+    await message.answer('Callback создан.')
+
+
 @router.message(CommandStart())
 async def cmd_start(message: Message):
-    if await db_check_user_exists(message.from_user.id):
+    if await db_settings_check_user_exists(message.from_user.id):
         await message.reply(f'Привет. \nТвой ID:{message.from_user.id} ты есть в нашей системе.\n'
                             f'Тебе осталось зарегистрироваться по команде /reg', reply_markup=k.main)
     else:
         logger.warning(f'Неизвестный пользователь: {message.from_user.username} ({message.from_user.id})')
 
 
-@router.message(Command('add'))  # Пока что добавление в систему происходит напрямую
+@router.message(Command('add'))
 async def add_user(message: Message, command: CommandObject):
+    """Функция для ручного добавления пользователя в БД"""
     user_id = command.args
     if type(user_id) != int:
         user_id = int(user_id)
         logger.info(user_id)
-    result = await db_add_user('ref', user_id)
+    result = await db_settings_add_user('ref', user_id)
     if result:
         await message.answer('✅Пользователь успешно добавлен!')
     else:
@@ -66,21 +75,26 @@ async def get_prof(message: Message):
     await message.answer('Инф')
 
 
+# TODO: переписать с получением статуса кликера (во избежание наслаивания callback'ов)
 @router.message(F.text == '🍉Запустить кликер на арбузы')
 async def get_clicker(message: Message):
-    await message.reply('✅Кликер включен', reply_markup=k.OFF)
+    await message.reply('✅ Кликер включен', reply_markup=k.OFF)
+    await db_callbacks_add(message.from_user.id, 'do_click', '1')
 
 
 @router.callback_query(F.data == 'OFF')
 async def clicker_off(callback: CallbackQuery):
     await callback.answer()
-    await callback.message.edit_text('Кликер выключен', reply_markup=k.ON)
+    await callback.message.edit_text('❌ Кликер выключен', reply_markup=k.ON)
+    await db_callbacks_add(callback.from_user.id, 'do_click', '2')
 
 
 @router.callback_query(F.data == 'ON')
 async def clicker_on(callback: CallbackQuery):
     await callback.answer()
-    await callback.message.edit_text('Кликер включен', reply_markup=k.OFF)
+    await callback.message.edit_text('✅ Кликер включен', reply_markup=k.OFF)
+    await db_callbacks_add(callback.from_user.id, 'do_click', '1')
+
 
 
 @router.message(Command('reg'))
@@ -130,11 +144,10 @@ async def buy_click(callback: CallbackQuery):
 
 @router.callback_query(F.data == 'YesK')
 async def yes_click(callback: CallbackQuery):
-    logger.warning(callback.from_user.id)
-    change = await db_update_user(callback.from_user.id, {'BUY_CLICK': True})
-    logger.warning(change)
+    change = await db_settings_update_user(callback.from_user.id, {'BUY_CLICK': True})
     if change:
         await callback.answer('Операция была успешно выполнена.')
+        await db_callbacks_add(callback.from_user.id, 'settings', 'BUY_CLICK')
     else:
         await callback.answer('Не удалось совершить операцию!')
     await callback.message.edit_text('Выберите действие: ', reply_markup=k.Settings)
@@ -143,9 +156,10 @@ async def yes_click(callback: CallbackQuery):
 
 @router.callback_query(F.data == 'NoK')
 async def no_click(callback: CallbackQuery):
-    change = await db_update_user(callback.from_user.id, {'BUY_CLICK': False})
+    change = await db_settings_update_user(callback.from_user.id, {'BUY_CLICK': False})
     if change:
         await callback.answer('Операция была успешно выполнена.')
+        await db_callbacks_add(callback.from_user.id, 'settings', 'BUY_CLICK')
     else:
         await callback.answer('Не удалось совершить операцию!')
     await callback.message.edit_text('Выберите действие: ', reply_markup=k.Settings)
@@ -161,9 +175,10 @@ async def auto_click(callback: CallbackQuery):
 
 @router.callback_query(F.data == 'YesA')
 async def yes_miner(callback: CallbackQuery):
-    change = await db_update_user(callback.from_user.id, {'BUY_MINER': True})
+    change = await db_settings_update_user(callback.from_user.id, {'BUY_MINER': True})
     if change:
         await callback.answer('Операция была успешно выполнена.')
+        await db_callbacks_add(callback.from_user.id, 'settings', 'BUY_MINER')
     else:
         await callback.answer('Не удалось совершить операцию!')
     await callback.message.edit_text('Выберите действие: ', reply_markup=k.Settings)
@@ -172,9 +187,10 @@ async def yes_miner(callback: CallbackQuery):
 
 @router.callback_query(F.data == 'NoA')
 async def no_miner(callback: CallbackQuery):
-    change = await db_update_user(callback.from_user.id, {'BUY_MINER': False})
+    change = await db_settings_update_user(callback.from_user.id, {'BUY_MINER': False})
     if change:
         await callback.answer('Операция была успешно выполнена.')
+        await db_callbacks_add(callback.from_user.id, 'settings', 'BUY_MINER')
     else:
         await callback.answer('Не удалось совершить операцию!')
     await callback.message.edit_text('Выберите действие: ', reply_markup=k.Settings)
@@ -190,9 +206,10 @@ async def buy_energy(callback: CallbackQuery):
 
 @router.callback_query(F.data == 'YesE')
 async def yes_energy(callback: CallbackQuery):
-    change = await db_update_user(callback.from_user.id, {'BUY_ENERGY': True})
+    change = await db_settings_update_user(callback.from_user.id, {'BUY_ENERGY': True})
     if change:
         await callback.answer('Операция была успешно выполнена.')
+        await db_callbacks_add(callback.from_user.id, 'settings', 'BUY_ENERGY')
     else:
         await callback.answer('Не удалось совершить операцию!')
     await callback.message.edit_text('Выберите действие: ', reply_markup=k.Settings)
@@ -201,9 +218,10 @@ async def yes_energy(callback: CallbackQuery):
 
 @router.callback_query(F.data == 'NoE')
 async def no_energy(callback: CallbackQuery):
-    change = await db_update_user(callback.from_user.id, {'BUY_ENERGY': False})
+    change = await db_settings_update_user(callback.from_user.id, {'BUY_ENERGY': False})
     if change:
         await callback.answer('Операция была успешно выполнена.')
+        await db_callbacks_add(callback.from_user.id, 'settings', 'BUY_ENERGY')
     else:
         await callback.answer('Не удалось совершить операцию!')
     await callback.message.edit_text('Выберите действие: ', reply_markup=k.Settings)
@@ -220,10 +238,11 @@ async def buy_lvl(callback: CallbackQuery, state: FSMContext):
 @router.message(Max.max_lvl)
 async def change_lvl(message: Message, state: FSMContext):
     try:
-        value = int(message.text)
-        change = await db_update_user(message.from_user.id, {'BUY_MAX_LVL': value})
+        value = message.text
+        change = await db_settings_update_user(message.from_user.id, {'BUY_MAX_LVL': int(value)})
         if change:
             await message.answer('✅Операция была успешно выполнена.')
+            await db_callbacks_add(message.from_user.id, 'settings', value)
     except ValueError:
         await message.answer('❌Не удалось совершить операцию! Введите число заново: ')
         await state.set_state(Max.max_lvl)

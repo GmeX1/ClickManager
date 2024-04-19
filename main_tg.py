@@ -6,7 +6,7 @@ from loguru import logger
 
 from Private import TOKEN
 from app.handlers import router
-from db.functions import init, db_update_user
+from db.functions import init, db_settings_update_user
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()

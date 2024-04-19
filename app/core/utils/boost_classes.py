@@ -1,6 +1,6 @@
 from loguru import logger
 
-from .exceptions import EmptyBoostList, UnknownBoostType
+from app.core.utils.exceptions import EmptyBoostList, UnknownBoostType
 
 
 class BoostHandler:

@@ -9,3 +9,10 @@ class Settings(Model):
     BUY_CLICK = fields.BooleanField(default=False)
     BUY_MINER = fields.BooleanField(default=False)
     BUY_ENERGY = fields.BooleanField(default=False)
+
+
+class Callbacks(Model):
+    id = fields.IntField(pk=True)
+    id_tg = fields.IntField()
+    column = fields.CharField(999)
+    value = fields.CharField(999, default=None)

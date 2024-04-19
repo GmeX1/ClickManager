@@ -7,7 +7,7 @@ from python_socks import ProxyConnectionError
 
 from app.core.proxy import ProxyHandler
 from app.core.utils.scripts import get_clients, run_client
-from db.functions import init
+from db.functions import init, db_callbacks_get
 from temp_vars import LOG_LEVEL
 
 clients, tasks, clicker_clients = list(), list(), list()
@@ -41,7 +41,8 @@ async def async_input():  # Инпут работает всего пару ра
 async def decorator_handler(client):  # TODO: Иногда появляется Cloudflare и просит включить куки :/
     global proxies, clients
     update = False
-    while client.do_click != 2:
+    client.do_click = 2
+    while client.do_click != 3:
         try:
             if update:
                 if len(proxies.good_proxies) == 0:
@@ -53,7 +54,16 @@ async def decorator_handler(client):  # TODO: Иногда появляется 
                 else:
                     logger.error('Не удалось обновить прокси!')
                     raise ProxyConnectionError
-            result = await client.run()
+            if client.do_click == 2:
+                row = await db_callbacks_get(id_tg=client.id, column='do_click')
+                if row:
+                    client.do_click = int(row.value)
+                    await row.delete()
+                    logger.debug(f'Статус кликера {client.id}: {row.value}')
+                else:
+                    await asyncio.sleep(3)
+            else:
+                await client.run()
         except AttributeError as ex:
             if 'NoneType' in repr(ex) or 'json' in repr(ex):
                 logger.debug('Меняем прокси...')
@@ -71,8 +81,8 @@ async def decorator_handler(client):  # TODO: Иногда появляется 
             await logger.complete()
 
 
-@logger.catch  # Должно помочь с трейсингом ошибок
-async def run_tasks():  # Код грязный. Почищу, когда разберусь с дистанционным управлением аккаунтами
+@logger.catch  # Помогает с трейсингом ошибок
+async def run_tasks():
     global clients, clicker_clients, tasks, proxies
     await init()
     clients = await get_clients()
@@ -83,7 +93,6 @@ async def run_tasks():  # Код грязный. Почищу, когда раз
     await asyncio.gather(*tasks)
 
 
-# TODO: ввести ядро под каждую сессию в threading
 if __name__ == '__main__':
     logger.remove()
     logger.add(sys.stderr, level=LOG_LEVEL, enqueue=True, colorize=True)

@@ -1,4 +1,3 @@
-import asyncio
 import glob
 
 from pyrogram import Client
@@ -7,9 +6,8 @@ from pyrogram.errors import ActiveUserRequired, AuthKeyDuplicated, AuthKeyInvali
 from pyrogram.raw.functions.messages import RequestWebView
 
 from app.core.clicker import ClickerClient
-from db.functions import db_get_user
 from temp_vars import BASE_URL
-from db.functions import db_check_user_exists
+from db.functions import db_settings_check_user_exists
 
 
 def get_session_names():
@@ -25,7 +23,7 @@ async def get_clients(check_db=True):
     """
     sessions = get_session_names()
     if check_db:
-        sessions = [session for session in sessions if await db_check_user_exists(session)]
+        sessions = [session for session in sessions if await db_settings_check_user_exists(session)]
     clients = [Client(session_name) for session_name in sessions]
     return clients
 
@@ -42,14 +40,7 @@ async def run_client(client, proxy=None):
             from_bot_menu=False,
             url=f'{BASE_URL}/users/me'
         ))
-    settings = await db_get_user(user_id)
-    settings = {
-        'BUY_CLICK': settings.BUY_CLICK,
-        'BUY_MINER': settings.BUY_MINER,
-        'BUY_ENERGY': settings.BUY_ENERGY,
-        'BUY_MAX_LVL': settings.BUY_MAX_LVL
-    }
-    return ClickerClient(client, user_id, settings, web_app, proxy)
+    return ClickerClient(client, user_id, web_app, proxy)
 
 
 async def client_auth_check(client: Client):

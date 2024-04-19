@@ -3,7 +3,7 @@ import asyncio
 from loguru import logger
 
 
-def request_handler(tries=5, log=False):
+def request_handler(tries=3, log=False):
     """
     Декоратор для функций, производящих POST/GET запросы. Его функция - отслеживать статус запроса, делать повторные
     попытки при возникновении проблем, облегчать ведение логов при наличии ошибок.
@@ -37,7 +37,7 @@ def request_handler(tries=5, log=False):
 
             nonlocal tries
             cur_tries = tries
-            while cur_tries > 0:
+            while cur_tries > -1:
                 try:
                     if log:
                         logger.debug(f'Пытаемся сделать запрос...')
@@ -51,9 +51,9 @@ def request_handler(tries=5, log=False):
 
                     return result
                 except (TimeoutError, asyncio.TimeoutError):
-                    cur_tries -= 1
                     logger.warning('Таймаут! Спим 10 секунд...', backtrace=False, diagose=False)
                     await asyncio.sleep(10)
+                    cur_tries -= 1
                 except Exception as ex:
                     logger.critical(f'Неизвестная ошибка от {ex.__class__.__name__}: {ex}')
                     return None

@@ -4,7 +4,6 @@ import random
 from hashlib import sha256
 from time import time
 from urllib.parse import unquote
-
 import aiohttp
 from aiohttp_socks import ProxyConnector
 from loguru import logger
@@ -12,16 +11,16 @@ from pyrogram import Client
 from pyrogram.raw.types.web_view_result_url import WebViewResultUrl
 
 from temp_vars import BASE_URL, CLICKS_AMOUNT, CLICKS_SLEEP, ENC_KEY, UPDATE_FREQ, UPDATE_VAR
-from .utils.boost_classes import BoostHandler
-from .utils.decorators import request_handler
-from .utils.tls import get_ssl
+from app.core.utils.boost_classes import BoostHandler
+from app.core.utils.decorators import request_handler
+from app.core.utils.tls import get_ssl
+from db.functions import db_settings_get_user, db_callbacks_get
 
 
-# TODO: Random GIFs
 class ClickerClient:
     """Основной клиент кликера, создаваемый по имени сессии Pyrogram."""
 
-    def __init__(self, client: Client, user_id: int, settings: dict, web_app: WebViewResultUrl, proxy: str = None):
+    def __init__(self, client: Client, user_id: int, web_app: WebViewResultUrl, proxy: str = None):
         """Создание клиента pyrogram, создание сессии для запросов"""
         self.client = client
         self.id = user_id
@@ -49,8 +48,8 @@ class ClickerClient:
                 "X-Telegram-Init-Data": self.get_init_data()
             })
         self.buy_manager = BoostHandler()
-        self.settings = settings
         self.do_click = 1
+        self.settings = dict()
 
     def get_init_data(self):
         """Получение init даты для шапки запроса"""
@@ -60,17 +59,20 @@ class ClickerClient:
         data = data.replace(user, unquote(user))
         return data
 
-    async def update(self, settings: dict):
+    async def update_db_settings(self):
         """Обновление настроек из БД"""
-        self.settings = {
-            'BUY_CLICK': settings['BUY_CLICK'] if 'BUY_CLICK' in settings.keys() else self.settings['BUY_CLICK'],
-            'BUY_MINER': settings['BUY_MINER'] if 'BUY_MINER' in settings.keys() else self.settings['BUY_MINER'],
-            'BUY_ENERGY': settings['BUY_ENERGY'] if 'BUY_ENERGY' in settings.keys() else self.settings['BUY_ENERGY'],
-            'BUY_MAX_LVL': settings['BUY_MAX_LVL'] if 'BUY_MAX_LVL' in settings.keys() else self.settings['BUY_MAX_LVL']
+        settings = await db_settings_get_user(self.id)
+        settings = {
+            'BUY_CLICK': settings.BUY_CLICK,
+            'BUY_MINER': settings.BUY_MINER,
+            'BUY_ENERGY': settings.BUY_ENERGY,
+            'BUY_MAX_LVL': settings.BUY_MAX_LVL
         }
-        await self.buy_manager.set_keys(self.settings['BUY_CLICK'], self.settings['BUY_MINER'],
-                                        self.settings['BUY_ENERGY'])
-        await self.update_boosts()
+        if self.settings != settings:
+            self.settings = settings
+            self.buy_manager.set_keys(self.settings['BUY_CLICK'], self.settings['BUY_MINER'],
+                                      self.settings['BUY_ENERGY'])
+            await self.update_boosts()
 
     async def update_proxy(self, proxy: str):
         await self.connector.close()
@@ -97,7 +99,6 @@ class ClickerClient:
                 "X-Telegram-Init-Data": self.get_init_data()
             })
         test = await self.session.get('https://arbuzapp.betty.games/api/event')  # TODO: функционал ивентов
-        logger.warning(test)
         if test.status == 200:
             return True
         logger.error(f'Ошибка {test.status} при обновлении прокси: {await test.text()}')
@@ -111,7 +112,6 @@ class ClickerClient:
         :return: исключение при ошибке ИЛИ словарь с необходимыми значениями
         """
         profile_request = await self.get_profile_request()
-        logger.debug(await profile_request.text())
         profile = await profile_request.json()
         if profile_request is None:
             return Exception('Не удалось получить профиль!')
@@ -180,6 +180,20 @@ class ClickerClient:
     async def update_boosts_stats(self, boost_types: list[str] = None):
         self.buy_manager.update_stats(boost_types=boost_types, level=self.settings['BUY_MAX_LVL'])
 
+    async def get_db_status(self):
+        statuses = await db_callbacks_get(self.id)
+        for status in statuses:
+            if status.column == 'settings':
+                logger.debug(f'{self.id} | Получен callback по настройкам: {status.value}')
+                await self.update_db_settings()
+                await status.delete()
+            elif status.column == 'do_click':
+                logger.debug(f'{self.id} | Получен callback по кликам: {status.value}')
+                self.do_click = int(status.value)
+                await status.delete()
+            else:
+                logger.debug(f'{self.id} | Получен callback с неизвестным столбцом: {status.column}')
+
     @request_handler()
     async def get_profile_request(self):
         result = await self.session.get(f'{BASE_URL}/users/me', timeout=10)
@@ -244,6 +258,7 @@ class ClickerClient:
             await self.stop()
 
     async def run(self):  # TODO: Сделать сбор статистики за цикл работы.
+        await self.update_db_settings()
         profile_data = await self.update_profile(shop=True, shop_keys=True)
         if isinstance(profile_data, Exception):
             raise profile_data
@@ -257,6 +272,7 @@ class ClickerClient:
         profile_update_timer = UPDATE_FREQ + random.uniform(-UPDATE_VAR, UPDATE_VAR)
         profile_update_start = time()
         shop_cooldown_start = time() - 10
+        db_update_start = time()
 
         # await self.update_boosts(log=False)
 
@@ -264,6 +280,10 @@ class ClickerClient:
         logger.debug(f'Текущая информация о профиле:\nЭнергия: {energy}\nВремя восстановления энергии:'
                      f'{recovery_time}\nБаланс:{balance}\nВремя последнего клика:{last_click}')
         while True:
+            if time() - db_update_start > 1:
+                await self.get_db_status()
+                db_update_start = time()
+
             profile_time = time() - profile_update_start
             if profile_time >= profile_update_timer:
                 if profile_update_timer == -1:
@@ -351,7 +371,11 @@ class ClickerClient:
                     await asyncio.sleep(random.randint(*CLICKS_SLEEP))
 
             elif self.do_click == 2:
-                logger.info(f'Останавливаем клиент {profile["id"]}')
+                logger.info(f'Ставим на паузу клиент {self.id}')
+                break
+
+            elif self.do_click == 3:
+                logger.info(f'Останавливаем клиент {self.id}')
                 await logger.complete()
                 await self.stop()
                 break

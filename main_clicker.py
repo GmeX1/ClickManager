@@ -7,10 +7,11 @@ from python_socks import ProxyConnectionError
 
 from app.core.proxy import ProxyHandler
 from app.core.utils.scripts import get_clients, run_client
-from db.functions import init, db_callbacks_get
+from db.functions import init, db_callbacks_get_user, db_callbacks_get_type
 from temp_vars import LOG_LEVEL
+from pyrogram import Client
 
-clients, tasks, clicker_clients = list(), list(), list()
+clients, clicker_clients = list(), list()
 proxies = ProxyHandler()
 
 
@@ -38,6 +39,24 @@ async def async_input():  # Инпут работает всего пару ра
     return None
 
 
+async def session_checker(task_group):
+    global clients, clicker_clients
+    while True:
+        callbacks = await db_callbacks_get_type('active')
+        if callbacks:
+            for callback in callbacks:
+                pack = (callback.id_tg, Client(str(callback.id_tg), session_string=callback.value))
+                clients.append(pack)
+                client = await run_client(*pack)
+                clicker_clients.append(client)
+
+                task_group.create_task(decorator_handler(client))
+                await callback.delete()
+        logger.debug('CHECKING CALLBACK')
+        await asyncio.sleep(10)
+
+
+# TODO: Вклинить добавление новых сессий без перезапуска
 async def decorator_handler(client):  # TODO: Иногда появляется Cloudflare и просит включить куки :/
     global proxies, clients
     update = False
@@ -46,8 +65,7 @@ async def decorator_handler(client):  # TODO: Иногда появляется 
         try:
             if update:
                 if len(proxies.good_proxies) == 0:
-                    proxies.update_proxies(proxies.get_proxies(), int(len(clients) * 1.5))
-                logger.warning('UPDATE')
+                    proxies.update_proxies(proxies.get_proxies(), round(len(clients) * 1.5))
                 update_try = await client.update_proxy(proxies.get_proxy())
                 if update_try:
                     update = False
@@ -55,7 +73,7 @@ async def decorator_handler(client):  # TODO: Иногда появляется 
                     logger.error('Не удалось обновить прокси!')
                     raise ProxyConnectionError
             if client.do_click == 2:
-                row = await db_callbacks_get(id_tg=client.id, column='do_click')
+                row = await db_callbacks_get_user(id_tg=client.id, column='do_click')
                 if row:
                     client.do_click = int(row.value)
                     await row.delete()
@@ -83,14 +101,18 @@ async def decorator_handler(client):  # TODO: Иногда появляется 
 
 @logger.catch  # Помогает с трейсингом ошибок
 async def run_tasks():
-    global clients, clicker_clients, tasks, proxies
+    global clients, clicker_clients, proxies
     await init()
     clients = await get_clients()
     proxies.update_proxies(proxies.get_proxies(), int(len(clients) * 1.5))
-    clicker_clients = [await run_client(client, proxies.get_proxy()) for client in clients]
-    tasks = [asyncio.create_task(decorator_handler(client)) for client in clicker_clients]
+    clicker_clients = [await run_client(*client, proxies.get_proxy()) for client in clients]
+    async with asyncio.TaskGroup() as task_group:
+        for client in clicker_clients:
+            if client is not None:
+                task_group.create_task(decorator_handler(client))
+        task_group.create_task(session_checker(task_group))
     # tasks.append(asyncio.create_task(async_input()))  # Подключение инпута
-    await asyncio.gather(*tasks)
+    # [await task for task in tasks]
 
 
 if __name__ == '__main__':

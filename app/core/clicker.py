@@ -14,7 +14,7 @@ from temp_vars import BASE_URL, CLICKS_AMOUNT, CLICKS_SLEEP, ENC_KEY, UPDATE_FRE
 from app.core.utils.boost_classes import BoostHandler
 from app.core.utils.decorators import request_handler
 from app.core.utils.tls import get_ssl
-from db.functions import db_settings_get_user, db_callbacks_get
+from db.functions import db_settings_get_user, db_callbacks_get_user, db_stats_update
 
 
 class ClickerClient:
@@ -78,7 +78,7 @@ class ClickerClient:
         await self.connector.close()
         await self.session.close()
         self.connector = ProxyConnector.from_url(proxy, ssl_context=get_ssl())
-        logger.warning('Creating session')
+        logger.debug('Создаём сессию...')
         self.session = aiohttp.ClientSession(
             # timeout=ClientTimeout(10),
             connector=self.connector,
@@ -181,7 +181,7 @@ class ClickerClient:
         self.buy_manager.update_stats(boost_types=boost_types, level=self.settings['BUY_MAX_LVL'])
 
     async def get_db_status(self):
-        statuses = await db_callbacks_get(self.id)
+        statuses = await db_callbacks_get_user(self.id)
         for status in statuses:
             if status.column == 'settings':
                 logger.debug(f'{self.id} | Получен callback по настройкам: {status.value}')
@@ -257,8 +257,9 @@ class ClickerClient:
             await logger.complete()
             await self.stop()
 
-    async def run(self):  # TODO: Сделать сбор статистики за цикл работы.
+    async def run(self):
         await self.update_db_settings()
+
         profile_data = await self.update_profile(shop=True, shop_keys=True)
         if isinstance(profile_data, Exception):
             raise profile_data
@@ -274,6 +275,12 @@ class ClickerClient:
         shop_cooldown_start = time() - 10
         db_update_start = time()
 
+        run_stats = {
+            'id_tg': self.id,
+            'summary': balance,
+            'boosts': 0,
+            'clicked': 0
+        }
         # await self.update_boosts(log=False)
 
         logger.info('Данные магазина успешно получены')
@@ -328,6 +335,7 @@ class ClickerClient:
                                 f'Сплю 15 секунд...')
                             shop_cooldown_start = time()
                         else:
+                            run_stats['boosts'] += boost.get_price()
                             logger.info(f'Успешно куплен буст {boost.icon} {boost.name}! ({boost.type})')
                             shop_flag = True
                     else:
@@ -345,6 +353,7 @@ class ClickerClient:
                             )
                             shop_cooldown_start = time()
                         else:
+                            run_stats['boosts'] += boost.get_price()
                             logger.info(f'Успешно улучшен буст {boost.icon} {boost.name}! ({boost.type})')
                             shop_flag = True
 
@@ -364,6 +373,7 @@ class ClickerClient:
                     last_click = click.get('lastClickSeconds', 0)
                     sleep_time = random.randint(*CLICKS_SLEEP)
 
+                    run_stats['clicked'] += click.get("count", 0)
                     logger.info(
                         f'Клики ({count}) успешно отправлены!  |  {energy}⚡ | +{click.get("count", 0)}🍉  |  '
                         f'HASH: {hashed}')
@@ -389,6 +399,9 @@ class ClickerClient:
                     logger.warning('Восстановление энергии закончено, продолжаем работу!')
                     recovery_start = -1
                     profile_update_timer = 0
+        run_stats['summary'] = balance + run_stats['boosts'] + run_stats['clicked'] - run_stats['summary']
+        await db_stats_update(run_stats)
+        logger.info(f'Статистика работы:\n{run_stats}')
 
     async def stop(self):
         await self.connector.close()

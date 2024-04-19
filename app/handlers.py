@@ -1,3 +1,5 @@
+import asyncio
+
 from aiogram import F, Router
 from aiogram.filters import Command, CommandStart, CommandObject
 from aiogram.fsm.context import FSMContext
@@ -96,19 +98,17 @@ async def clicker_on(callback: CallbackQuery):
     await db_callbacks_add(callback.from_user.id, 'do_click', '1')
 
 
-
 @router.message(Command('reg'))
 async def reg(callback: CallbackQuery):
     await callback.answer('Отправьте свой контакт', reply_markup=k.contact_btn)
 
 
-# Проверка, что пользователь ввел свой номер телефона
-@router.message(F.contact)  # TODO: Нельзя напрямую отправлять код 0_о
+@router.message(F.contact)  # Нельзя напрямую отправлять код 0_о
 async def save_phone_number(message: Message, state: FSMContext):
     if message.contact.user_id == message.from_user.id:
         await state.update_data(number=message.contact.phone_number)
         client = Client(str(message.from_user.id), api_id, api_hash)
-        await client.connect()
+        await client.connect()  # TODO: Клиент не удаляется из памяти, не могу переподключить сессию :(
         sCode = await client.send_code(message.contact.phone_number)
         await state.update_data(Clients=client, sCode=sCode)
         await message.answer('Введите код (⚠️⚠️⚠️ОБЯЗАТЕЛЬНО⚠️⚠️⚠️: поставьте пробел внутри кода, место не важно)')
@@ -120,9 +120,12 @@ async def reg_code(message: Message, state: FSMContext):
     try:
         data = await state.get_data()
         await data["Clients"].sign_in(data["number"], data["sCode"].phone_code_hash, message.text.replace(' ', ''))
+        await db_settings_update_user(message.from_user.id, {'active': True})
+        await db_callbacks_add(message.from_user.id, 'active', await data['Clients'].export_session_string())
         await message.answer("Спасибо")
         await state.clear()
-    except bad_request_400:
+    except Exception as ex:
+        logger.error(f'{ex.__class__.__name__}: {ex}')
         await message.answer('Ошибка входа. Отправьте контакт заново и перечитайте условия')
 
 

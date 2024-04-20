@@ -173,7 +173,7 @@ class ProxyHandler:
 
         proxies.extend(list(self.good_proxies))
         self.good_proxies = set()
-        with multiprocessing.Pool() as p:  # TODO: Python рекомендует использовать concurrent.futures (переписать код)
+        with multiprocessing.Pool() as p:
             for proxy_addr, result in p.imap_unordered(self.check_proxy, proxies, chunksize=8):
                 if result:
                     self.good_proxies.add(proxy_addr)
@@ -186,6 +186,7 @@ class ProxyHandler:
 
     def check_proxy(self, proxy: str):
         proxy_address = f"socks4://{proxy}"
+        # if proxy_address in self.blacklist or '45.81.232.17' in proxy_address:
         if proxy_address in self.blacklist:
             return proxy_address, False
         try:

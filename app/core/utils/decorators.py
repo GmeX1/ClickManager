@@ -1,4 +1,5 @@
 import asyncio
+import traceback
 
 from loguru import logger
 
@@ -47,7 +48,7 @@ def request_handler(tries=3, log=False):
                     if status != 200:
                         logger.error(f'Статус запроса: {status}')
                         logger.debug(await result.text())
-                        raise Exception(result, status)
+                        # raise Exception(result, status)
 
                     return result
                 except (TimeoutError, asyncio.TimeoutError):
@@ -56,6 +57,7 @@ def request_handler(tries=3, log=False):
                     cur_tries -= 1
                 except Exception as ex:
                     logger.critical(f'Неизвестная ошибка от {ex.__class__.__name__}: {ex}')
+                    traceback.print_tb(ex.__traceback__)
                     return None
                 await logger.complete()
             else:

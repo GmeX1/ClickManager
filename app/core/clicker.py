@@ -4,17 +4,21 @@ import random
 from hashlib import sha256
 from time import time
 from urllib.parse import unquote
+
 import aiohttp
 from aiohttp_socks import ProxyConnector
 from loguru import logger
 from pyrogram import Client
 from pyrogram.raw.types.web_view_result_url import WebViewResultUrl
 
-from temp_vars import BASE_URL, CLICKS_AMOUNT, CLICKS_SLEEP, ENC_KEY, UPDATE_FREQ, UPDATE_VAR
 from app.core.utils.boost_classes import BoostHandler
 from app.core.utils.decorators import request_handler
+from app.core.utils.exceptions import ReceiptError
 from app.core.utils.tls import get_ssl
-from db.functions import db_settings_get_user, db_callbacks_get_user, db_stats_update
+from db.functions import (db_callbacks_add, db_callbacks_get_user, db_settings_get_user, db_stats_get_sum,
+                          db_stats_update)
+from temp_vars import BASE_URL, CLICKS_AMOUNT, CLICKS_SLEEP, ENC_KEY, UPDATE_FREQ, UPDATE_VAR
+from temp_vars_local import RECEIPTS
 
 
 class ClickerClient:
@@ -98,7 +102,9 @@ class ClickerClient:
                               "Chrome/121.0.0.0 Mobile Safari/537.36",
                 "X-Telegram-Init-Data": self.get_init_data()
             })
-        test = await self.session.get('https://arbuzapp.betty.games/api/event')  # TODO: функционал ивентов
+        test = await self.get_connection_status()  # TODO: функционал ивентов
+        if test is None:
+            return False
         if test.status == 200:
             return True
         logger.error(f'Ошибка {test.status} при обновлении прокси: {await test.text()}')
@@ -125,6 +131,7 @@ class ClickerClient:
         balance = profile.get('clicks', 0)
         last_click = profile.get('lastClickSeconds', 0)
         recovery_time = profile.get('energyLimit', 0) // profile.get('energyBoostSum', 0) // 8
+        receipt = profile.get('receipt', {'limit': 0, 'limitSpent': 0})
 
         if shop_keys:
             self.buy_manager.set_keys(self.settings['BUY_CLICK'], self.settings['BUY_MINER'],
@@ -149,7 +156,8 @@ class ClickerClient:
             'energy': energy,
             'balance': balance,
             'last_click': last_click,
-            'recovery_time': recovery_time
+            'recovery_time': recovery_time,
+            'receipt': receipt
         }
 
     async def update_boosts(self, log=False):
@@ -191,8 +199,22 @@ class ClickerClient:
                 logger.debug(f'{self.id} | Получен callback по кликам: {status.value}')
                 self.do_click = int(status.value)
                 await status.delete()
-            else:
-                logger.debug(f'{self.id} | Получен callback с неизвестным столбцом: {status.column}')
+            elif status.column == 'receipt' and self.id in RECEIPTS:
+                value = eval(status.value)
+                if self.id in value['ids']:
+                    logger.debug(f'{self.id} | Получен callback по чекам: {status.value}')
+                    await self.receipt_activate(value['receiptId'])
+                    value['ids'].remove(self.id)
+                if len(value['ids']) > 0:
+                    await db_callbacks_add(status.id_tg, status.column, str(value))
+                await status.delete()
+
+            # else:
+            #     logger.debug(f'{self.id} | Получен callback с неизвестным столбцом: {status.column}')
+
+    @request_handler()
+    async def get_connection_status(self):
+        return await self.session.get('https://arbuzapp.betty.games/api/event')
 
     @request_handler()
     async def get_profile_request(self):
@@ -207,6 +229,19 @@ class ClickerClient:
     @request_handler()
     async def get_boosts_purchased(self):
         result = await self.session.get(f'{BASE_URL}/boosts/active', timeout=10)
+        return result
+
+    @request_handler()
+    async def get_receipt_activate(self, receipt_id):
+        return await self.session.get(f'{BASE_URL}/receipts/activate/{receipt_id}')
+
+    @request_handler()
+    async def post_receipt_create(self, count):
+        result = await self.session.post(f'{BASE_URL}/receipts/create', timeout=10, json={
+            'activations': 2,
+            # 'count': 100
+            'count': count
+        })
         return result
 
     @request_handler()
@@ -248,6 +283,47 @@ class ClickerClient:
         })
         return hashed, result
 
+    async def receipt_create(self, profile_data: dict):
+        """Создаёт чек для списания накопленного долга (с учётом суточного лимита)"""
+        # TODO: Присылать уведомление при нехватке чека, перепроверять списание долга
+        debt = (await db_stats_get_sum(self.id)).debt
+        if debt > 0:
+            cur_limit = profile_data['receipt']['limit'] - profile_data['receipt']['limitSpent']
+            if cur_limit > 0:
+                if cur_limit < debt:
+                    count = cur_limit
+                else:
+                    count = debt
+                fee = count * 0.05
+
+                if count + fee < profile_data['balance']:
+                    result = await self.post_receipt_create(round(count))
+                else:
+                    result = await self.post_receipt_create(round(profile_data['balance']))
+                if result is None:
+                    raise ReceiptError('Не удалось отправить запрос!')
+                if result.status == 400:
+                    print(cur_limit, count)
+                    logger.warning('Достигнут лимит по чекам! :(')
+                    return 'limit'
+
+                await db_stats_update({'id_tg': self.id, 'debt': debt - count})
+                result = await result.json()
+                value = {'receiptId': result.get('receiptId', ''), 'ids': RECEIPTS.copy()}
+                await db_callbacks_add(result.get('creatorId', ''), 'receipt', str(value))
+                return 'callback'
+            else:
+                logger.info(f'{self.id} | Достигнут лимит перевода!')
+            return 'limit'  # TODO: сменить вывод на авто callback
+        return 'no debt'
+
+    async def receipt_activate(self, receipt_id):
+        result = await self.get_receipt_activate(receipt_id)
+        if result:
+            logger.debug(f'{self.id} | Успешно активирован чек: {receipt_id}')
+        else:
+            logger.debug(f'{self.id} | Не удалось активировать чек!')
+
     async def run_try(self):
         try:
             result = self.run()
@@ -279,13 +355,15 @@ class ClickerClient:
             'id_tg': self.id,
             'summary': balance,
             'boosts': 0,
-            'clicked': 0
+            'clicked': 0,
+            'debt': 0
         }
         # await self.update_boosts(log=False)
 
         logger.info('Данные магазина успешно получены')
         logger.debug(f'Текущая информация о профиле:\nЭнергия: {energy}\nВремя восстановления энергии:'
                      f'{recovery_time}\nБаланс:{balance}\nВремя последнего клика:{last_click}')
+
         while True:
             if time() - db_update_start > 1:
                 await self.get_db_status()
@@ -400,7 +478,17 @@ class ClickerClient:
                     recovery_start = -1
                     profile_update_timer = 0
         run_stats['summary'] = balance + run_stats['boosts'] + run_stats['clicked'] - run_stats['summary']
+        if self.id not in RECEIPTS:  # TODO: проверять чеки внутри кликера
+            run_stats['debt'] = run_stats['summary'] * 0.15
+        profile_data = await self.update_profile(False, False)
+        if self.id not in RECEIPTS:
+            try:
+                await self.receipt_create(profile_data)
+            except ReceiptError as ex:
+                logger.error(ex)
         await db_stats_update(run_stats)
+        # TODO: краткая сводка информации по завершении работы
+        # await db_callbacks_add(self.id, 'stats', '1')
         logger.info(f'Статистика работы:\n{run_stats}')
 
     async def stop(self):

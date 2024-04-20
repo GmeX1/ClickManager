@@ -25,6 +25,7 @@ class SessionStats(Model):
     summary = fields.FloatField(default=0)
     boosts = fields.FloatField(default=0)
     clicked = fields.FloatField(default=0)
+    debt = fields.FloatField(default=0)
 
 
 class SummaryStats(Model):
@@ -33,3 +34,4 @@ class SummaryStats(Model):
     summary = fields.FloatField(default=0)
     boosts = fields.FloatField(default=0)
     clicked = fields.FloatField(default=0)
+    debt = fields.FloatField(default=0)

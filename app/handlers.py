@@ -16,7 +16,6 @@ from db.functions import db_settings_add_user, db_settings_check_user_exists, db
 router = Router()
 
 
-
 class Reg(StatesGroup):
     number = State()
     kod = State()
@@ -108,7 +107,7 @@ async def save_phone_number(message: Message, state: FSMContext):
     if message.contact.user_id == message.from_user.id:
         await state.update_data(number=message.contact.phone_number)
         client = Client(str(message.from_user.id), api_id, api_hash)
-        await client.connect()  # TODO: Клиент не удаляется из памяти, не могу переподключить сессию :(
+        await client.connect()
         sCode = await client.send_code(message.contact.phone_number)
         await state.update_data(Clients=client, sCode=sCode)
         await message.answer('Введите код (⚠️⚠️⚠️ОБЯЗАТЕЛЬНО⚠️⚠️⚠️: поставьте пробел внутри кода, место не важно)')

@@ -93,12 +93,14 @@ async def db_callbacks_add(id_tg, column, value):
 async def db_stats_update(data: dict):
     cur_stats = await SessionStats.filter(id_tg=data['id_tg']).first()
     sum_stats = await SummaryStats.filter(id_tg=data['id_tg']).first()
-    sum_data = {
-        'id_tg': sum_stats.id_tg,
-        'summary': sum_stats.summary + data['summary'],
-        'boosts': sum_stats.boosts + data['boosts'],
-        'clicked': sum_stats.clicked + data['clicked']
-    }
+    # sum_data = {
+    #     'id_tg': sum_stats.id_tg,
+    #     'summary': sum_stats.summary + data['summary'],
+    #     'boosts': sum_stats.boosts + data['boosts'],
+    #     'clicked': sum_stats.clicked + data['clicked'],
+    #     'debt': sum_stats.debt + data['debt']
+    # }
+    sum_data = {key: data.get(key, '') for key in data.keys() if data.get(key, '') != ''}
     try:
         await cur_stats.update_from_dict(data)
         await cur_stats.save()
@@ -108,8 +110,12 @@ async def db_stats_update(data: dict):
     except Exception as ex:
         raise ex
 
-# async def db_callbacks_delete(record: Callbacks):
-#     await record.delete()
+
+async def db_stats_get_sum(id_tg):
+    user = await SummaryStats.filter(id_tg=id_tg).first()
+    if user:
+        return user
+    return None
 
 
 # async def main():

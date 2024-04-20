@@ -1,7 +1,7 @@
 from loguru import logger
 from tortoise import Tortoise
 
-from db.models import Callbacks, SessionStats, Settings, SummaryStats
+from db.models import Callbacks, SessionStats, Settings, SummaryStats, Hash
 
 
 async def init():
@@ -118,6 +118,27 @@ async def db_stats_get_sum(id_tg):
     return None
 
 
+async def db_add_hash(anton_hash):
+    hash_p = await Callbacks.create(Temporary_hash=anton_hash)
+    await hash_p.save()
+    logger.trace("Hash успешно создан")
+    return hash_p
+
+
+async def db_check_hash(user_hash):
+    hash_user = await Hash.filter(Temporary_hash=user_hash)
+    if hash_user:
+        logger.trace("Пользователь с таким hash уже существует.")
+        return True
+    else:
+        logger.trace("Пользователь с таким hash не найден.")
+        return False
+
+
+async def db_del_hesh(del_hash):
+    # Зачем first()
+    del_hash_ = await Hash.filter(Temporary_hash=del_hash).first()
+    await del_hash_.delete()
 # async def main():
 #     await init()
 #

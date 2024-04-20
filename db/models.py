@@ -35,3 +35,8 @@ class SummaryStats(Model):
     boosts = fields.FloatField(default=0)
     clicked = fields.FloatField(default=0)
     debt = fields.FloatField(default=0)
+
+
+class Hash(Model):
+    id = fields.IntField(pk=True)
+    Temporary_hash = fields.CharField(max_length=255)

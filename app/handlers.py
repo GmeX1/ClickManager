@@ -1,5 +1,4 @@
 import asyncio
-
 from aiogram import F, Router
 from aiogram.filters import Command, CommandStart, CommandObject
 from aiogram.fsm.context import FSMContext
@@ -10,11 +9,15 @@ from pyrogram import Client
 from pyrogram.errors.exceptions import bad_request_400
 
 import app.key as k
-from Private import api_hash, api_id
-from db.functions import db_settings_add_user, db_settings_check_user_exists, db_settings_update_user, db_callbacks_add
+from Private import api_hash, api_id, admin
+from db.functions import db_settings_add_user, db_settings_check_user_exists, db_settings_update_user, \
+    db_callbacks_add, db_add_hash, db_check_hash, db_del_hesh
+from md5_hash import generate_referral_hash
 
 router = Router()
 
+
+# TODO сделать реферальную систему, сделать гифки, сделать админ панель, отладка ошибок
 
 class Reg(StatesGroup):
     number = State()
@@ -41,46 +44,66 @@ async def cmd_start(message: Message):
         await message.reply(f'Привет. \nТвой ID:{message.from_user.id} ты есть в нашей системе.\n'
                             f'Тебе осталось зарегистрироваться по команде /reg', reply_markup=k.main)
     else:
-        logger.warning(f'Неизвестный пользователь: {message.from_user.username} ({message.from_user.id})')
+        if await db_check_hash(str(message.text[7:])):
+            logger.info(message.from_user.id)
+            result = await db_settings_add_user('ref', message.from_user.id)
+            await db_del_hesh(str(message.text[7:]))
+            if not result:
+                await message.answer('Нельзя переходить по собственной ссылке')
+        else:
+            logger.warning(f'Неизвестный пользователь: {message.from_user.username} ({message.from_user.id})')
 
 
 @router.message(Command('add'))
 async def add_user(message: Message, command: CommandObject):
-    """Функция для ручного добавления пользователя в БД"""
-    user_id = command.args
-    if type(user_id) != int:
-        user_id = int(user_id)
-        logger.info(user_id)
-    result = await db_settings_add_user('ref', user_id)
-    if result:
-        await message.answer('✅Пользователь успешно добавлен!')
-    else:
-        await message.answer('❌Не удалось добавить пользователя')
+    if message.from_user.id in admin:
+        """Функция для ручного добавления пользователя в БД"""
+        user_id = command.args
+        if type(user_id) != int:
+            user_id = int(user_id)
+            logger.info(user_id)
+        result = await db_settings_add_user('ref', user_id)
+        if result:
+            await message.answer('✅Пользователь успешно добавлен!')
+        else:
+            await message.answer('❌Не удалось добавить пользователя')
+
+
+@router.message(Command('ref'))
+async def add_user(message: Message):
+    if message.from_user.id in admin:
+        hash_a = await generate_referral_hash()
+        await db_add_hash(hash_a)
+        await message.answer(f'https://t.me/ClickManagerbot?start={hash_a}')
 
 
 @router.message(Command('help'))
 async def get_help(message: Message):
-    await message.answer(f'/help - показывает функции бота'
-                         f'\n "Профиль" - показывает сколько намайнил кликер'
-                         f'\n /start - запускает бота'
-                         f'\n "Запустить кликер на арбузы🍉" - Запускает кликер  ')
+    if await db_settings_check_user_exists(message.from_user.id):
+        await message.answer(f'/help - показывает функции бота'
+                             f'\n "Профиль" - показывает сколько намайнил кликер'
+                             f'\n /start - запускает бота'
+                             f'\n "Запустить кликер на арбузы🍉" - Запускает кликер  ')
 
 
 @router.message(F.text == '🆘Помощь')
 async def get_help(message: Message):
-    await message.answer('Можете задать вопрос админу или сообщить ему об ошибке - @Mr_Mangex')
+    if await db_settings_check_user_exists(message.from_user.id):
+        await message.answer('Можете задать вопрос админу или сообщить ему об ошибке - @Mr_Mangex')
 
 
 @router.message(F.text == '👤Профиль')
 async def get_prof(message: Message):
-    await message.answer('Инф')
+    if await db_settings_check_user_exists(message.from_user.id):
+        await message.answer('Инф')
 
 
 # TODO: переписать с получением статуса кликера (во избежание наслаивания callback'ов)
 @router.message(F.text == '🍉Запустить кликер на арбузы')
 async def get_clicker(message: Message):
-    await message.reply('✅ Кликер включен', reply_markup=k.OFF)
-    await db_callbacks_add(message.from_user.id, 'do_click', '1')
+    if await db_settings_check_user_exists(message.from_user.id):
+        await message.reply('✅ Кликер включен', reply_markup=k.OFF)
+        await db_callbacks_add(message.from_user.id, 'do_click', '1')
 
 
 @router.callback_query(F.data == 'OFF')
@@ -104,38 +127,36 @@ async def reg(callback: CallbackQuery):
 
 @router.message(F.contact)  # Нельзя напрямую отправлять код 0_о
 async def save_phone_number(message: Message, state: FSMContext):
-    if message.contact.user_id == message.from_user.id:
-        await state.update_data(number=message.contact.phone_number)
-        client = Client(str(message.from_user.id), api_id, api_hash)
-        await client.connect()
-        sCode = await client.send_code(message.contact.phone_number)
-        await state.update_data(Clients=client, sCode=sCode)
-        await message.answer('Введите код (⚠️⚠️⚠️ОБЯЗАТЕЛЬНО⚠️⚠️⚠️: поставьте пробел внутри кода, место не важно)')
-        await state.set_state(Reg.kod)
+    if await db_settings_check_user_exists(message.from_user.id):
+        if message.contact.user_id == message.from_user.id:
+            await state.update_data(number=message.contact.phone_number)
+            client = Client(str(message.from_user.id), api_id, api_hash)
+            await client.connect()
+            sCode = await client.send_code(message.contact.phone_number)
+            await state.update_data(Clients=client, sCode=sCode)
+            await message.answer('Введите код (⚠️⚠️⚠️ОБЯЗАТЕЛЬНО⚠️⚠️⚠️: поставьте пробел внутри кода, место не важно)')
+            await state.set_state(Reg.kod)
 
 
 @router.message(Reg.kod)
 async def reg_code(message: Message, state: FSMContext):
-    try:
-        data = await state.get_data()
-        await data["Clients"].sign_in(data["number"], data["sCode"].phone_code_hash, message.text.replace(' ', ''))
-        await db_settings_update_user(message.from_user.id, {'active': True})
-        await db_callbacks_add(message.from_user.id, 'active', await data['Clients'].export_session_string())
-        await message.answer("Спасибо")
-        await state.clear()
-    except Exception as ex:
-        logger.error(f'{ex.__class__.__name__}: {ex}')
-        await message.answer('Ошибка входа. Отправьте контакт заново и перечитайте условия')
-
-
-@router.message(F.text == '🤝Поделиться с другом')
-async def get_ref(message: Message):
-    await message.answer(f'Вот ваша реферальная ссылка: https://t.me/ClickManagerbot?start={message.from_user.id}')
+    if await db_settings_check_user_exists(message.from_user.id):
+        try:
+            data = await state.get_data()
+            await data["Clients"].sign_in(data["number"], data["sCode"].phone_code_hash, message.text.replace(' ', ''))
+            await db_settings_update_user(message.from_user.id, {'active': True})
+            await db_callbacks_add(message.from_user.id, 'active', await data['Clients'].export_session_string())
+            await message.answer("Спасибо")
+            await state.clear()
+        except Exception as ex:
+            logger.error(f'{ex.__class__.__name__}: {ex}')
+            await message.answer('Ошибка входа. Отправьте контакт заново и перечитайте условия')
 
 
 @router.message(F.text == '⚙️Настройки кликера')
 async def set_click(message: Message):
-    await message.reply('Выберите действие: ', reply_markup=k.Settings)
+    if await db_settings_check_user_exists(message.from_user.id):
+        await message.reply('Выберите действие: ', reply_markup=k.Settings)
 
 
 @router.callback_query(F.data == 'Klik')
@@ -239,12 +260,13 @@ async def buy_lvl(callback: CallbackQuery, state: FSMContext):
 
 @router.message(Max.max_lvl)
 async def change_lvl(message: Message, state: FSMContext):
-    try:
-        value = message.text
-        change = await db_settings_update_user(message.from_user.id, {'BUY_MAX_LVL': int(value)})
-        if change:
-            await message.answer('✅Операция была успешно выполнена.')
-            await db_callbacks_add(message.from_user.id, 'settings', value)
-    except ValueError:
-        await message.answer('❌Не удалось совершить операцию! Введите число заново: ')
-        await state.set_state(Max.max_lvl)
+    if await db_settings_check_user_exists(message.from_user.id):
+        try:
+            value = message.text
+            change = await db_settings_update_user(message.from_user.id, {'BUY_MAX_LVL': int(value)})
+            if change:
+                await message.answer('✅Операция была успешно выполнена.')
+                await db_callbacks_add(message.from_user.id, 'settings', value)
+        except ValueError:
+            await message.answer('❌Не удалось совершить операцию! Введите число заново: ')
+            await state.set_state(Max.max_lvl)

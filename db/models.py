@@ -39,4 +39,4 @@ class SummaryStats(Model):
 
 class Hash(Model):
     id = fields.IntField(pk=True)
-    Temporary_hash = fields.CharField(max_length=255)
+    temporary_hash = fields.CharField(max_length=255)

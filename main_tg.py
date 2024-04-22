@@ -27,9 +27,9 @@ async def get_cat_gif():
 async def callback_handler():
     await init()
     # Выдаёт ошибку
-    try:
-        stop = True
-        while stop:
+    stop = True
+    while stop:
+        try:
             callbacks = await db_callbacks_get_type('stats')
             if len(callbacks) > 0:
                 for callback in callbacks:
@@ -42,8 +42,8 @@ async def callback_handler():
                                              animation=gif_url)
                     await callback.delete()
             await asyncio.sleep(1)
-    except Exception as ex:
-        traceback.print_tb(ex.__traceback__)
+        except Exception as ex:
+            traceback.print_tb(ex.__traceback__)
 
 
 async def main_tg():

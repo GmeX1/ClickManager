@@ -102,15 +102,15 @@ async def get_help(message: Message):
 @router.message(F.text == '🆘Помощь')
 async def get_help(message: Message):
     if await db_settings_check_user_exists(message.from_user.id):
-        await message.answer('Можете задать вопрос админу или сообщить ему об ошибке - @Mr_Mangex')
+        await message.reply('Можете задать вопрос админу или сообщить ему об ошибке - @Mr_Mangex')
 
 
 @router.message(F.text == '👤Профиль')
 async def get_prof(message: Message):
     if await db_settings_check_user_exists(message.from_user.id):
         res = await db_stats_get_sum(message.from_user.id)
-        await message.answer(f'Благодаря нашему боту вы заработали: {res.summary}\n'
-                             f'Было куплено бустов: {0}"')
+        await message.reply(f'Благодаря нашему боту вы заработали: {res.summary}\n'
+                            f'Было куплено бустов: {0}"')
 
 
 # TODO: переписать с получением статуса кликера (во избежание наслаивания callback'ов)

@@ -13,13 +13,14 @@ from pyrogram.errors.exceptions import SessionPasswordNeeded
 import app.key as k
 from Private import api_hash, api_id, admin
 from db.functions import db_settings_add_user, db_settings_check_user_exists, db_settings_update_user, \
-    db_callbacks_add, db_add_hash, db_check_hash, db_del_hesh, db_settings_get_user, db_callbacks_get_type, db_stats_get_session
+    db_callbacks_add, db_add_hash, db_check_hash, db_del_hesh, db_settings_get_user, db_stats_get_sum
 from app.md5_hash import generate_referral_hash
+
 # import aiohttp гифки
 router = Router()
 
 
-# TODO сделать гифки(навыключение кликераm, на профиль), сделать админ панель, отладка ошибок, сделать профиль await db_callbacks_get_type('stats') вк/вкл
+# TODO сделать гифки(навыключение кликераm, на профиль), сделать админ панель, отладка ошибок
 
 class Reg(StatesGroup):
     number = State()
@@ -92,9 +93,9 @@ async def add_user(message: Message):
 async def get_help(message: Message):
     if await db_settings_check_user_exists(message.from_user.id):
         await message.answer(f'/help - показывает функции бота'
-                             f'\n "Профиль" - показывает сколько намайнил кликер'
-                             f'\n /start - запускает бота'
-                             f'\n "Запустить кликер на арбузы🍉" - Запускает кликер  ')
+                             f'\n "Профиль" - показывает сколько вы заработали.'
+                             f'\n /start - запускает бота.'
+                             f'\n "Запустить кликер на арбузы🍉" - Запускает кликер+.')
 
 
 @router.message(F.text == '🆘Помощь')
@@ -106,7 +107,9 @@ async def get_help(message: Message):
 @router.message(F.text == '👤Профиль')
 async def get_prof(message: Message):
     if await db_settings_check_user_exists(message.from_user.id):
-        await message.answer('Инф')
+        res = await db_stats_get_sum(message.from_user.id)
+        await message.answer(f'Благодаря нашему боту вы заработали: {res.summary}\n'
+                             f'Было куплено бустов: {0}"')
 
 
 # TODO: переписать с получением статуса кликера (во избежание наслаивания callback'ов)
@@ -114,37 +117,22 @@ async def get_prof(message: Message):
 async def get_clicker(message: Message):
     if await db_settings_check_user_exists(message.from_user.id):
         await message.reply('✅ Кликер включен', reply_markup=k.OFF)
+
         await db_callbacks_add(message.from_user.id, 'do_click', '1')
 
 
 @router.callback_query(F.data == 'OFF')
 async def clicker_off(callback: CallbackQuery):
     await callback.answer()
-    await callback.message.edit_text('❌ Кликер выключен', reply_markup=k.ON)
     await db_callbacks_add(callback.from_user.id, 'do_click', '2')
-    # временная сессия
-    stop = True
-    while stop:
-        callbacks = await db_callbacks_get_type('stats')
-        if len(callbacks) > 0:
-            for callback_db in callbacks:
-                if callback_db.id_tg == callback.from_user.id:
-                    print(callback_db)
-                    await callback_db.delete()
-                    stop = False
-        await asyncio.sleep(1)
-    res = await db_stats_get_session(callback.from_user.id)
-    print(res.summary)
-
-
-
+    await callback.message.edit_text('❌ Кликер выключен', reply_markup=k.ON)
 
 
 @router.callback_query(F.data == 'ON')
 async def clicker_on(callback: CallbackQuery):
     await callback.answer()
-    await callback.message.edit_text('✅ Кликер включен', reply_markup=k.OFF)
     await db_callbacks_add(callback.from_user.id, 'do_click', '1')
+    await callback.message.edit_text('✅ Кликер включен', reply_markup=k.OFF)
 
 
 @router.message(Command('reg'))

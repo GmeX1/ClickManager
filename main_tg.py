@@ -3,15 +3,25 @@ import sys
 import traceback
 
 from aiogram import Bot, Dispatcher
+from aiogram.client.session import aiohttp
 from loguru import logger
 from Private import TOKEN
 from app.handlers import router
-# from aiogram.types import Message
+
 from db.functions import init, db_callbacks_get_type, db_stats_get_session
 from tortoise.connection import connections
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
+CAT_API_URL = 'https://api.thecatapi.com/v1/images/search?mime_types=gif'
+
+
+async def get_cat_gif():
+    async with aiohttp.ClientSession() as session:
+        async with session.get(CAT_API_URL) as response:
+            data = await response.json()
+            gif_url = data[0]['url']
+            return gif_url
 
 
 async def callback_handler():
@@ -23,11 +33,13 @@ async def callback_handler():
             callbacks = await db_callbacks_get_type('stats')
             if len(callbacks) > 0:
                 for callback in callbacks:
+                    gif_url = await get_cat_gif()
                     res = await db_stats_get_session(callback.id_tg)
-                    await bot.send_message(chat_id=callback.id_tg, text=f'За последнюю сессию вы '
-                                                                        f'заработали: {res.summary}\n'
-                                                                        f'Бустов было куплено: {0} \n'
-                                                                        f'Совершено кликов: {res.clicked}')
+                    await bot.send_animation(chat_id=callback.id_tg, caption=f'За последнюю сессию вы '
+                                                                             f'заработали: {res.summary}\n'
+                                                                             f'Бустов было куплено: {0} \n'
+                                                                             f'Совершено кликов: {res.clicked}',
+                                             animation=gif_url)
                     await callback.delete()
             await asyncio.sleep(1)
     except Exception as ex:

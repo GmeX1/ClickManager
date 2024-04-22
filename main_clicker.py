@@ -1,6 +1,7 @@
 import asyncio
 import sys
 from asyncio import IncompleteReadError
+
 from tortoise.connection import connections
 from loguru import logger
 from python_socks import ProxyConnectionError, ProxyTimeoutError
@@ -41,7 +42,6 @@ async def async_input():
         await asyncio.sleep(0.05)
     print('return')
     return None
-
 
 async def session_checker(task_group):
     """Дополнительный модуль, запускаемый рядом с кликерами для добавления доп. сессий"""

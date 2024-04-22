@@ -1,6 +1,7 @@
 import traceback
 
 from aiogram import F, Router
+from aiogram.client.session import aiohttp
 from aiogram.filters import Command, CommandObject, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -19,6 +20,15 @@ from db.functions import (db_add_hash, db_callbacks_add, db_check_hash, db_del_h
 
 # import aiohttp гифки
 router = Router()
+CAT_API_URL = 'https://api.thecatapi.com/v1/images/search?mime_types=gif'
+
+
+async def get_cat_gif():
+    async with aiohttp.ClientSession() as session:
+        async with session.get(CAT_API_URL) as response:
+            data = await response.json()
+            gif_url = data[0]['url']
+            return gif_url
 
 
 # TODO сделать гифки(навыключение кликераm, на профиль), сделать админ панель, отладка ошибок
@@ -93,10 +103,11 @@ async def add_user(message: Message):
 @router.message(Command('help'))
 async def get_help(message: Message):
     if await db_settings_check_user_exists(message.from_user.id):
-        await message.answer(f'/help - показывает функции бота'
-                             f'\n "Профиль" - показывает сколько вы заработали.'
-                             f'\n /start - запускает бота.'
-                             f'\n "Запустить кликер на арбузы🍉" - Запускает кликер+.')
+        gif_url = await get_cat_gif()
+        await message.reply_animation(animation=gif_url, caption=f'/help - показывает функции бота'
+                                                                 f'\n "Профиль" - показывает сколько вы заработали.'
+                                                                 f'\n /start - запускает бота.'
+                                                                 f'\n "Запустить кликер на арбузы🍉" - Запускает кликер+.')
 
 
 @router.message(F.text == '🆘Помощь')
@@ -108,9 +119,10 @@ async def get_help(message: Message):
 @router.message(F.text == '👤Профиль')
 async def get_prof(message: Message):
     if await db_settings_check_user_exists(message.from_user.id):
+        gif_url = await get_cat_gif()
         res = await db_stats_get_sum(message.from_user.id)
-        await message.reply(f'Благодаря нашему боту вы заработали: {res.summary}\n'
-                            f'Было куплено бустов: {0}"')
+        await message.reply_animation(caption=f'Благодаря нашему боту вы заработали: {res.summary}\n'
+                                              f'Было куплено бустов:{0}', animation=gif_url)
 
 
 # TODO: переписать с получением статуса кликера (во избежание наслаивания callback'ов)

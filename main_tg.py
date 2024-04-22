@@ -15,6 +15,7 @@ dp = Dispatcher()
 
 
 async def callback_handler():
+    await init()
     # Выдаёт ошибку
     try:
         stop = True
@@ -32,8 +33,9 @@ async def callback_handler():
     except Exception as ex:
         traceback.print_tb(ex.__traceback__)
 
+
 async def main_tg():
-    await init()
+    # await init()
     dp.include_router(router)
     await asyncio.gather(callback_handler(), dp.start_polling(bot))
 

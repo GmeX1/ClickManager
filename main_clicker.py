@@ -46,6 +46,7 @@ async def async_input():
 async def session_checker(task_group):
     """Дополнительный модуль, запускаемый рядом с кликерами для добавления доп. сессий"""
     global clients, clicker_clients
+    await init()
     while True:
         callbacks = await db_callbacks_get_type('active')
         if callbacks:
@@ -63,6 +64,7 @@ async def session_checker(task_group):
 
 async def decorator_handler(client):  # Иногда появляется Cloudflare и просит включить куки :/
     global proxies, clients
+    await init()
     update = False
     client.do_click = 2
     receipt_timer = 0  # Таймер для активации чеков

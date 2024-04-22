@@ -14,6 +14,7 @@ OFF = InlineKeyboardMarkup(inline_keyboard=[
 ON = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton(text='⬅✅Включить', callback_data='ON')]
 ])
+# Profile =
 
 Settings = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton(text='Клики', callback_data='Klik')],

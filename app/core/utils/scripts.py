@@ -29,13 +29,15 @@ async def get_clients(check_db=True):
     return clients
 
 
-async def run_client(sess_name, client, proxy=None):
-    user = await db_settings_get_user(sess_name)
+async def run_client(sess_name: str, client: Client, proxy=None):
+    user = await db_settings_get_user(int(sess_name))
     status = await client_startup_auth_check(client)
     if not status:
         logger.warning(f'Найдена недействительная сессия: {sess_name}')
         if user.active != 0:
-            await db_settings_update_user(sess_name, {'active': False})
+            await db_settings_update_user(int(sess_name), {'active': False})
+        if client.is_connected:
+            await client.terminate()
         os.remove(f'{sess_name}.session')
         return None
     user_id = (await client.get_me()).id

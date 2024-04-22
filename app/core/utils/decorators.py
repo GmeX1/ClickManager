@@ -2,7 +2,8 @@ import asyncio
 import traceback
 
 from loguru import logger
-
+from pyrogram.errors import AuthKeyUnregistered
+from pyrogram.errors.exceptions.unauthorized_401 import AuthKeyUnregistered as AuthKeyUnregistered_401
 
 def request_handler(tries=3, log=False):
     """
@@ -55,6 +56,8 @@ def request_handler(tries=3, log=False):
                     logger.warning('Таймаут! Спим 10 секунд...', backtrace=False, diagose=False)
                     await asyncio.sleep(10)
                     cur_tries -= 1
+                except (AuthKeyUnregistered, AuthKeyUnregistered_401) as auth:
+                    raise auth
                 except Exception as ex:
                     logger.critical(f'Неизвестная ошибка от {ex.__class__.__name__}: {ex}')
                     traceback.print_tb(ex.__traceback__)

@@ -102,7 +102,7 @@ class ClickerClient:
                               "Chrome/121.0.0.0 Mobile Safari/537.36",
                 "X-Telegram-Init-Data": self.get_init_data()
             })
-        test = await self.get_connection_status()  # TODO: функционал ивентов
+        test = await self.get_connection_status()
         if test is None:
             return False
         if test.status == 200:
@@ -237,10 +237,10 @@ class ClickerClient:
 
     @request_handler()
     async def post_receipt_create(self, count):
+        logger.warning(count)
         result = await self.session.post(f'{BASE_URL}/receipts/create', timeout=10, json={
             'activations': 2,
-            # 'count': 100
-            'count': count
+            'count': round(count / 2)
         })
         return result
 
@@ -299,13 +299,15 @@ class ClickerClient:
                 if count + fee < profile_data['balance']:
                     result = await self.post_receipt_create(round(count))
                 else:
-                    result = await self.post_receipt_create(round(profile_data['balance']))
+                    result = await self.post_receipt_create(int(profile_data['balance'] - fee))
+
                 if result is None:
                     raise ReceiptError('Не удалось отправить запрос!')
-                if result.status == 400:
-                    print(cur_limit, count)
+                elif result.status == 400:
                     logger.warning('Достигнут лимит по чекам! :(')
                     return 'limit'
+                elif result.status != 200:
+                    logger.error(f'Неизвестная ошибка при создании чека: {result.status} ({await result.text()})')
 
                 await db_stats_update({'id_tg': self.id, 'debt': debt - count})
                 result = await result.json()
@@ -313,7 +315,7 @@ class ClickerClient:
                 await db_callbacks_add(result.get('creatorId', ''), 'receipt', str(value))
                 return 'callback'
             else:
-                logger.info(f'{self.id} | Достигнут лимит перевода!')
+                logger.warning(f'{self.id} | Достигнут лимит перевода!')
             return 'limit'  # TODO: сменить вывод на авто callback
         return 'no debt'
 
@@ -478,7 +480,7 @@ class ClickerClient:
                     recovery_start = -1
                     profile_update_timer = 0
         run_stats['summary'] = balance + run_stats['boosts'] + run_stats['clicked'] - run_stats['summary']
-        if self.id not in RECEIPTS:  # TODO: проверять чеки внутри кликера
+        if self.id not in RECEIPTS:
             run_stats['debt'] = run_stats['summary'] * 0.15
         profile_data = await self.update_profile(False, False)
         if self.id not in RECEIPTS:

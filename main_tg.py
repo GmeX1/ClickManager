@@ -3,10 +3,10 @@ import sys
 
 from aiogram import Bot, Dispatcher
 from loguru import logger
-
 from Private import TOKEN
 from app.handlers import router
-from db.functions import init, db_settings_update_user
+from db.functions import init
+from tortoise.connection import connections
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
@@ -24,4 +24,5 @@ if __name__ == '__main__':
     try:
         asyncio.run(main_tg())
     except KeyboardInterrupt:
+        asyncio.run(connections.close_all(discard=True))
         print('Exit')

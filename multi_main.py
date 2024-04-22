@@ -6,7 +6,7 @@ from main_clicker import run_tasks
 from main_tg import main_tg
 
 
-if __name__ == '__main__':  # TODO: Добавить проверку выхода из сессии
+if __name__ == '__main__':  # TODO: количество купленных бустов в таблице
     logger.remove()
     logger.add(sys.stderr, level='DEBUG', enqueue=True, colorize=True)
     logger.add('debug_log.log', level='DEBUG', enqueue=True, retention=2, rotation='3 days')

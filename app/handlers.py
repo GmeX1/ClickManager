@@ -1,4 +1,3 @@
-import asyncio
 from aiogram import F, Router
 from aiogram.filters import Command, CommandStart, CommandObject
 from aiogram.fsm.context import FSMContext
@@ -6,18 +5,15 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
 from loguru import logger
 from pyrogram import Client
-from pyrogram.errors.exceptions import bad_request_400
 
 import app.key as k
 from Private import api_hash, api_id, admin
 from db.functions import db_settings_add_user, db_settings_check_user_exists, db_settings_update_user, \
-    db_callbacks_add, db_add_hash, db_check_hash, db_del_hesh
-from md5_hash import generate_referral_hash
+    db_callbacks_add, db_add_hash, db_check_hash, db_del_hesh, db_callbacks_get_type
+from app.md5_hash import generate_referral_hash
 
 router = Router()
 
-
-# TODO сделать реферальную систему, сделать гифки, сделать админ панель, отладка ошибок
 
 class Reg(StatesGroup):
     number = State()

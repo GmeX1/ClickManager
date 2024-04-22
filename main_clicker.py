@@ -1,19 +1,20 @@
 import asyncio
 import sys
 from asyncio import IncompleteReadError
-
+from tortoise.connection import connections
 from loguru import logger
 from python_socks import ProxyConnectionError, ProxyTimeoutError
 import traceback
 from app.core.proxy import ProxyHandler
 from app.core.utils.scripts import get_clients, run_client
-from db.functions import init, db_callbacks_get_user, db_callbacks_get_type, db_callbacks_add
+from db.functions import init, db_callbacks_get_user, db_callbacks_get_type, db_callbacks_add, db_settings_update_user
 from temp_vars import LOG_LEVEL
 from temp_vars_local import RECEIPTS
 from pyrogram import Client
 from time import time
-from app.core.utils.exceptions import ReceiptError
-
+from pyrogram.errors.exceptions.unauthorized_401 import AuthKeyUnregistered as AuthKeyUnregistered_401
+from pyrogram.errors import AuthKeyUnregistered
+import os
 clients, clicker_clients = list(), list()
 proxies = ProxyHandler()
 
@@ -60,7 +61,7 @@ async def session_checker(task_group):
         await asyncio.sleep(10)
 
 
-async def decorator_handler(client):  # TODO: Иногда появляется Cloudflare и просит включить куки :/
+async def decorator_handler(client):  # Иногда появляется Cloudflare и просит включить куки :/
     global proxies, clients
     update = False
     client.do_click = 2
@@ -114,6 +115,14 @@ async def decorator_handler(client):  # TODO: Иногда появляется 
                 ConnectionResetError) as ex:
             logger.debug(f'Меняем прокси... {ex}')
             update = True
+        except (AuthKeyUnregistered_401, AuthKeyUnregistered):
+            logger.error('Пользователь закрыл сессию! Завершаем работу...')
+            await client.stop()
+            await db_settings_update_user(str(client.id), {'active': False})
+            if client.client.is_connected:
+                await client.client.terminate()
+            os.remove(f'{str(client.id)}.session')
+            break
         except Exception as ex:
             logger.critical(f'Неизвестная ошибка от {ex.__class__.__name__}: {ex}')
             traceback.print_tb(ex.__traceback__)
@@ -139,9 +148,21 @@ async def run_tasks():
     # [await task for task in tasks]
 
 
+async def stop_app():
+    global proxies, clicker_clients
+    await proxies.close()
+    for client in clicker_clients:
+        await client.stop()
+    await connections.close_all(discard=True)
+
+
 if __name__ == '__main__':
     logger.remove()
     logger.add(sys.stderr, level=LOG_LEVEL, enqueue=True, colorize=True)
     logger.add('debug_log.log', level='INFO', enqueue=True, retention='3 days')
     # asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-    asyncio.run(run_tasks())
+    try:
+        asyncio.run(run_tasks())
+    except KeyboardInterrupt:
+        asyncio.run(stop_app())
+

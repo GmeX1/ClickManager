@@ -111,6 +111,7 @@ async def db_stats_update(data: dict):
         raise ex
 
 
+# За всё время
 async def db_stats_get_sum(id_tg):
     user = await SummaryStats.filter(id_tg=id_tg).first()
     if user:
@@ -118,15 +119,23 @@ async def db_stats_get_sum(id_tg):
     return None
 
 
+# За последнюю сессию
+async def db_stats_get_session(id_tg):
+    user = await SessionStats.filter(id_tg=id_tg).first()
+    if user:
+        return user
+    return None
+
+
 async def db_add_hash(anton_hash):
-    hash_p = await Callbacks.create(Temporary_hash=anton_hash)
+    hash_p = await Hash.create(temporary_hash=anton_hash)
     await hash_p.save()
     logger.trace("Hash успешно создан")
     return hash_p
 
 
 async def db_check_hash(user_hash):
-    hash_user = await Hash.filter(Temporary_hash=user_hash)
+    hash_user = await Hash.filter(temporary_hash=user_hash)
     if hash_user:
         logger.trace("Пользователь с таким hash уже существует.")
         return True
@@ -136,8 +145,7 @@ async def db_check_hash(user_hash):
 
 
 async def db_del_hesh(del_hash):
-    # Зачем first()
-    del_hash_ = await Hash.filter(Temporary_hash=del_hash).first()
+    del_hash_ = await Hash.filter(temporary_hash=del_hash).first()
     await del_hash_.delete()
 # async def main():
 #     await init()

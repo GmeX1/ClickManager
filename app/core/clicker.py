@@ -490,7 +490,7 @@ class ClickerClient:
                 logger.error(ex)
         await db_stats_update(run_stats)
         # TODO: краткая сводка информации по завершении работы
-        # await db_callbacks_add(self.id, 'stats', '1')
+        await db_callbacks_add(self.id, 'stats', '1')
         logger.info(f'Статистика работы:\n{run_stats}')
 
     async def stop(self):

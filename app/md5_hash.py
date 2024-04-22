@@ -13,5 +13,5 @@ async def generate_referral_hash():
     fixed_referral_string = "fixed_referral_string"
     random_seed = str(time.time()) + str(random.randint(1, 1000))
     referral_code = fixed_referral_string + random_seed
-    referral_hash = generate_md5_hash(referral_code)
+    referral_hash = await generate_md5_hash(referral_code)
     return referral_hash

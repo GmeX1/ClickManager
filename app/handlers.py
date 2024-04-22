@@ -1,25 +1,32 @@
+import traceback
+
 from aiogram import F, Router
-from aiogram.filters import Command, CommandStart, CommandObject
+from aiogram.filters import Command, CommandObject, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
 from loguru import logger
 from pyrogram import Client
+from pyrogram.errors.exceptions import SessionPasswordNeeded
 
 import app.key as k
-from Private import api_hash, api_id, admin
-from db.functions import db_settings_add_user, db_settings_check_user_exists, db_settings_update_user, \
-    db_callbacks_add, db_add_hash, db_check_hash, db_del_hesh, db_callbacks_get_type
+from Private import admin, api_hash, api_id
 from app.md5_hash import generate_referral_hash
+from db.functions import (db_add_hash, db_callbacks_add, db_check_hash, db_del_hesh, db_settings_add_user,
+                          db_settings_check_user_exists, db_settings_get_user, db_settings_update_user)
 
+# import aiohttp гифки
 router = Router()
 
 
+# TODO сделать гифки(навыключение кликераm, на профиль), сделать админ панель, отладка ошибок, сделать профиль await db_callbacks_get_type('stats') вк/вкл
+
 class Reg(StatesGroup):
     number = State()
-    kod = State()
+    code = State()
     sCode = State()
     Clients = State()
+    v_cod = State()
 
 
 class Max(StatesGroup):
@@ -37,13 +44,21 @@ async def test_db_callback(message: Message, command: CommandObject):
 @router.message(CommandStart())
 async def cmd_start(message: Message):
     if await db_settings_check_user_exists(message.from_user.id):
-        await message.reply(f'Привет. \nТвой ID:{message.from_user.id} ты есть в нашей системе.\n'
-                            f'Тебе осталось зарегистрироваться по команде /reg', reply_markup=k.main)
+        res = await db_settings_get_user(message.from_user.id)
+        if res.active == 1:
+            await message.reply(f'Привет. \nТвой ID:{message.from_user.id} ты есть в нашей системе.\n',
+                                reply_markup=k.main)
+        else:
+            await message.reply(f'Привет. \nТвой ID:{message.from_user.id} ты есть в нашей системе.\n'
+                                f'Тебе осталось зарегистрироваться по команде /reg', reply_markup=k.main)
+
     else:
-        if await db_check_hash(str(message.text[7:])):
+        if await db_check_hash(message.text[7:]):
             logger.info(message.from_user.id)
             result = await db_settings_add_user('ref', message.from_user.id)
-            await db_del_hesh(str(message.text[7:]))
+            await db_del_hesh(message.text[7:])
+            await message.reply(f'Привет. \nТвой ID:{message.from_user.id} ты есть в нашей системе.\n'
+                                f'Тебе осталось зарегистрироваться по команде /reg', reply_markup=k.main)
             if not result:
                 await message.answer('Нельзя переходить по собственной ссылке')
         else:
@@ -118,23 +133,27 @@ async def clicker_on(callback: CallbackQuery):
 
 @router.message(Command('reg'))
 async def reg(callback: CallbackQuery):
-    await callback.answer('Отправьте свой контакт', reply_markup=k.contact_btn)
+    if await db_settings_check_user_exists(callback.from_user.id):
+        if (await db_settings_get_user(callback.from_user.id)).active == 0:
+            await callback.answer('Отправьте свой контакт', reply_markup=k.contact_btn)
 
 
 @router.message(F.contact)  # Нельзя напрямую отправлять код 0_о
 async def save_phone_number(message: Message, state: FSMContext):
     if await db_settings_check_user_exists(message.from_user.id):
-        if message.contact.user_id == message.from_user.id:
-            await state.update_data(number=message.contact.phone_number)
-            client = Client(str(message.from_user.id), api_id, api_hash)
-            await client.connect()
-            sCode = await client.send_code(message.contact.phone_number)
-            await state.update_data(Clients=client, sCode=sCode)
-            await message.answer('Введите код (⚠️⚠️⚠️ОБЯЗАТЕЛЬНО⚠️⚠️⚠️: поставьте пробел внутри кода, место не важно)')
-            await state.set_state(Reg.kod)
+        if (await db_settings_get_user(message.from_user.id)).active == 0:
+            if message.contact.user_id == message.from_user.id:
+                await state.update_data(number=message.contact.phone_number)
+                client = Client(str(message.from_user.id), api_id, api_hash)
+                await client.connect()
+                sCode = await client.send_code(message.contact.phone_number)
+                await state.update_data(Clients=client, sCode=sCode)
+                await message.answer(
+                    'Введите код (⚠️⚠️⚠️ОБЯЗАТЕЛЬНО⚠️⚠️⚠️: поставьте пробел внутри кода, место не важно)')
+                await state.set_state(Reg.code)
 
 
-@router.message(Reg.kod)
+@router.message(Reg.code)
 async def reg_code(message: Message, state: FSMContext):
     if await db_settings_check_user_exists(message.from_user.id):
         try:
@@ -143,10 +162,34 @@ async def reg_code(message: Message, state: FSMContext):
             await db_settings_update_user(message.from_user.id, {'active': True})
             await db_callbacks_add(message.from_user.id, 'active', await data['Clients'].export_session_string())
             await message.answer("Спасибо")
+            await message.reply(f'Привет. \nТвой ID:{message.from_user.id} ты есть в нашей системе.\n',
+                                reply_markup=k.main)
             await state.clear()
+        except SessionPasswordNeeded:
+            await state.update_data(code=message.text.replace(' ', ''))
+            await message.answer('У вас установлен 2fa. Пожалуйста, введите мастер-пароль.')
+            await state.set_state(Reg.v_cod)
         except Exception as ex:
             logger.error(f'{ex.__class__.__name__}: {ex}')
             await message.answer('Ошибка входа. Отправьте контакт заново и перечитайте условия')
+
+
+@router.message(Reg.v_cod)
+async def reg_code(message: Message, state: FSMContext):
+    try:
+        data = await state.get_data()
+        await data["Clients"].check_password(message.text)
+        await data["Clients"].sign_in(data["number"], data["sCode"].phone_code_hash, data['code'])
+        await db_settings_update_user(message.from_user.id, {'active': True})
+        await db_callbacks_add(message.from_user.id, 'active', await data['Clients'].export_session_string())
+        await message.answer("Спасибо")
+        await message.reply(f'Привет. \nТвой ID:{message.from_user.id} ты есть в нашей системе.\n',
+                            reply_markup=k.main)
+        await state.clear()
+    except Exception as ex:
+        logger.error(f'{ex.__class__.__name__}: {ex}')
+        traceback.print_tb(ex.__traceback__)
+        await message.answer('Ошибка входа. Отправьте контакт заново и перечитайте условия')
 
 
 @router.message(F.text == '⚙️Настройки кликера')

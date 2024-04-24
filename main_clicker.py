@@ -1,21 +1,23 @@
 import asyncio
+import os
 import sys
-from asyncio import IncompleteReadError
-
-from tortoise.connection import connections
-from loguru import logger
-from python_socks import ProxyConnectionError, ProxyTimeoutError
 import traceback
+from asyncio import IncompleteReadError
+from threading import Event
+from time import time
+
+from loguru import logger
+from pyrogram import Client
+from pyrogram.errors import AuthKeyUnregistered
+from pyrogram.errors.exceptions.unauthorized_401 import AuthKeyUnregistered as AuthKeyUnregistered_401
+from python_socks import ProxyConnectionError, ProxyTimeoutError
+from app.core.utils.exceptions import StopSignal
 from app.core.proxy import ProxyHandler
 from app.core.utils.scripts import get_clients, run_client
-from db.functions import init, db_callbacks_get_user, db_callbacks_get_type, db_callbacks_add, db_settings_update_user
+from db.functions import db_callbacks_add, db_callbacks_get_type, db_callbacks_get_user, db_settings_update_user, init
 from temp_vars import LOG_LEVEL
 from temp_vars_local import RECEIPTS
-from pyrogram import Client
-from time import time
-from pyrogram.errors.exceptions.unauthorized_401 import AuthKeyUnregistered as AuthKeyUnregistered_401
-from pyrogram.errors import AuthKeyUnregistered
-import os
+
 clients, clicker_clients = list(), list()
 proxies = ProxyHandler()
 
@@ -43,28 +45,41 @@ async def async_input():
     print('return')
     return None
 
-async def session_checker(task_group):
+
+async def session_checker(task_group: asyncio.TaskGroup, event: Event):
     """Дополнительный модуль, запускаемый рядом с кликерами для добавления доп. сессий"""
     global clients, clicker_clients
-    await init()
-    while True:
-        callbacks = await db_callbacks_get_type('active')
-        if callbacks:
-            for callback in callbacks:
-                pack = (callback.id_tg, Client(str(callback.id_tg), session_string=callback.value))
-                clients.append(pack)
-                client = await run_client(*pack)
-                clicker_clients.append(client)
+    # await init()
+    runner = True
+    while runner:
+        try:
+            if event.is_set():
+                runner = False
+                await stop_app()
+                raise StopSignal('Backend: флажок найден')
 
-                task_group.create_task(decorator_handler(client))
-                await callback.delete()
-        logger.trace('CHECKING CALLBACK')
-        await asyncio.sleep(10)
+            callbacks = await db_callbacks_get_type('active')
+            if callbacks:
+                for callback in callbacks:
+                    pack = (callback.id_tg, Client(str(callback.id_tg), session_string=callback.value))
+                    clients.append(pack)
+                    client = await run_client(*pack)
+                    clicker_clients.append(client)
+
+                    task_group.create_task(decorator_handler(client))
+                    await callback.delete()
+            logger.trace('CHECKING CALLBACK')
+            await asyncio.sleep(3)
+        except RuntimeError:
+            logger.warning('Backend: что-то взаимодействует с БД, ждём разблокировки...')
+            await asyncio.sleep(2.4)
+        except StopSignal as ex:
+            raise ex
 
 
 async def decorator_handler(client):  # Иногда появляется Cloudflare и просит включить куки :/
     global proxies, clients
-    await init()
+    # await init()
     update = False
     client.do_click = 2
     receipt_timer = 0  # Таймер для активации чеков
@@ -134,37 +149,52 @@ async def decorator_handler(client):  # Иногда появляется Cloudf
             await logger.complete()
 
 
+async def stop_app():
+    global proxies, clicker_clients, clients
+    proxies.close()
+    for client in clicker_clients:
+        if client.do_click == 1:
+            client.do_click = 3
+        else:
+            client.do_click = 3
+            await client.stop()
+
+
 @logger.catch  # Помогает с трейсингом ошибок
-async def run_tasks():
+async def run_tasks(event: Event):
     global clients, clicker_clients, proxies
     await init()
     clients = await get_clients()
     proxies.update_proxies(proxies.get_proxies(), round(len(clients) * 1.5))
     clicker_clients = [await run_client(*client, proxies.get_proxy()) for client in clients]
-    async with asyncio.TaskGroup() as task_group:
-        for client in clicker_clients:
-            if client is not None:
-                task_group.create_task(decorator_handler(client))
-        task_group.create_task(session_checker(task_group))
+    try:
+        logger.info('Запуск цикла backend...')
+        async with asyncio.TaskGroup() as task_group:
+            for client in clicker_clients:
+                if client is not None:
+                    task_group.create_task(decorator_handler(client))
+            task_group.create_task(session_checker(task_group, event))
+    except ExceptionGroup as group:
+        for ex in group.exceptions:
+            if ex.__class__ == StopSignal:
+                logger.warning('Закрываем backend...')
+                # await stop_app()
+            else:
+                raise ex
     # tasks.append(asyncio.create_task(async_input()))  # Подключение инпута
     # [await task for task in tasks]
 
 
-async def stop_app():
-    global proxies, clicker_clients
-    await proxies.close()
-    for client in clicker_clients:
-        await client.stop()
-    await connections.close_all(discard=True)
-
-
 if __name__ == '__main__':
+    # logging.basicConfig(level=logging.DEBUG)
     logger.remove()
     logger.add(sys.stderr, level=LOG_LEVEL, enqueue=True, colorize=True)
-    logger.add('debug_log.log', level='INFO', enqueue=True, retention='3 days')
+    logger.add('debug_log.log', level=LOG_LEVEL, enqueue=True, retention='3 days')
     # asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    my_event = Event()
     try:
-        asyncio.run(run_tasks())
+        asyncio.run(run_tasks(my_event))
     except KeyboardInterrupt:
-        asyncio.run(stop_app())
-
+        logger.info('Закрываем backend...')
+        my_event.set()
+        # asyncio.run(stop_app())

@@ -465,7 +465,7 @@ class ClickerClient:
                 break
 
             elif self.do_click == 3:
-                logger.info(f'Останавливаем клиент {self.id}')
+                logger.warning(f'Останавливаем клиент {self.id}')
                 await logger.complete()
                 await self.stop()
                 break
@@ -491,9 +491,10 @@ class ClickerClient:
         await db_stats_update(run_stats)
         # TODO: краткая сводка информации по завершении работы
         await db_callbacks_add(self.id, 'stats', '1')
-        logger.info(f'Статистика работы:\n{run_stats}')
+        # logger.info(f'Статистика работы:\n{run_stats}')
 
     async def stop(self):
         await self.connector.close()
         await self.session.close()
-        await self.client.stop()
+        if self.client.is_connected:
+            await self.client.stop()

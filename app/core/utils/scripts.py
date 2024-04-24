@@ -1,14 +1,25 @@
 import glob
 import os
 
+from aiogram.client.session import aiohttp
+from loguru import logger
 from pyrogram import Client
 from pyrogram.errors import ActiveUserRequired, AuthKeyDuplicated, AuthKeyInvalid, AuthKeyPermEmpty, \
     AuthKeyUnregistered, SessionExpired, SessionPasswordNeeded, SessionRevoked, UserDeactivated, UserDeactivatedBan
 from pyrogram.raw.functions.messages import RequestWebView
-from loguru import logger
+
 from app.core.clicker import ClickerClient
+from db.functions import db_settings_check_user_exists, db_settings_get_user, db_settings_update_user
 from temp_vars import BASE_URL
-from db.functions import db_settings_check_user_exists, db_settings_update_user, db_settings_get_user
+
+
+async def get_cat_gif():
+    url = 'https://api.thecatapi.com/v1/images/search?mime_types=gif'
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as response:
+            data = await response.json()
+            gif_url = data[0]['url']
+            return gif_url
 
 
 def get_session_names():

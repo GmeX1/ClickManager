@@ -1,21 +1,35 @@
-from loguru import logger
+import asyncio
 import sys
 import threading
-import asyncio
+import time
+import os
+from loguru import logger
+from tortoise.connection import connections
 from main_clicker import run_tasks
 from main_tg import main_tg
 
-
 if __name__ == '__main__':  # TODO: количество купленных бустов в таблице
+    stop_signal = threading.Event()
     logger.remove()
     logger.add(sys.stderr, level='DEBUG', enqueue=True, colorize=True)
     logger.add('debug_log.log', level='DEBUG', enqueue=True, retention=2, rotation='3 days')
     threads = [
-        threading.Thread(target=asyncio.run, args=(run_tasks(),), name='backend'),
-        threading.Thread(target=asyncio.run, args=(main_tg(),), name='frontend')
+        threading.Thread(target=asyncio.run, args=(run_tasks(stop_signal),), name='backend'),
+        threading.Thread(target=asyncio.run, args=(main_tg(stop_signal),), name='frontend')
     ]
-    for thread in threads:
-        thread.start()
-    for thread in threads:
-        thread.join()
-
+    try:
+        logger.info('Запускаем процессы...')
+        for thread in threads:
+            thread.start()
+        while True:
+            time.sleep(100)
+        # for thread in threads:
+        #     thread.join()
+    except KeyboardInterrupt:
+        logger.warning('Завершаем работу...')
+        stop_signal.set()
+        for thread in threads:
+            thread.join()
+        asyncio.run(connections.close_all(discard=True))
+        logger.info('Работа завершена.')
+        os._exit(0)

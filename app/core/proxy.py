@@ -144,21 +144,29 @@ class ProxyHandler:
             self.ip = None
         return True if self.ip is not None else False
 
-    def get_proxies(self, req_type: str = 'site'):
-        if req_type == 'site':
-            request = self.session.get(self.url)
-            if request.status_code != 200:
-                logger.critical(f'Не удалось получить прокси! Код: {request.status_code} ({request.text})')
-                return None
-            proxies = request.text.split()
+    def get_proxies(self, req_type: str = 'site', recursion=False):
+        retries = 0
+        while retries < 3:
+            try:
+                if req_type == 'site':
+                    request = self.session.get(self.url)
+                    if request.status_code != 200:
+                        logger.critical(f'Не удалось получить прокси! Код: {request.status_code} ({request.text})')
+                        return None
+                    proxies = request.text.split()
+                else:
+                    request = self.session.get(self.url_file)
+                    if request.status_code != 200:
+                        logger.critical(f'Не удалось получить прокси! Код: {request.status_code} ({request.text})')
+                        return None
+                    proxies = list(map(lambda x: x.split('://')[-1], request.text.split()))
+                shuffle(proxies)
+                return proxies
+            except ConnectTimeout:
+                retries += 1
         else:
-            request = self.session.get(self.url_file)
-            if request.status_code != 200:
-                logger.critical(f'Не удалось получить прокси! Код: {request.status_code} ({request.text})')
-                return None
-            proxies = list(map(lambda x: x.split('://')[-1], request.text.split()))
-        shuffle(proxies)
-        return proxies
+            if not recursion:
+                return self.get_proxies('file' if req_type == 'site' else 'site', True)
 
     def get_proxy(self):
         if len(self.good_proxies) > 0:

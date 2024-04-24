@@ -9,7 +9,7 @@ async def init():
         db_url='sqlite://db/db.sqlite3',
         modules={'models': ['db.models']},
     )
-    await Tortoise.generate_schemas()
+    await Tortoise.generate_schemas(safe=True)  # АКТИВИРОВАТЬ ТОЛЬКО ДЛЯ СОЗДАНИЯ БД
 
 
 async def db_settings_get_user(id_tg: int):
@@ -93,13 +93,6 @@ async def db_callbacks_add(id_tg, column, value):
 async def db_stats_update(data: dict):
     cur_stats = await SessionStats.filter(id_tg=data['id_tg']).first()
     sum_stats = await SummaryStats.filter(id_tg=data['id_tg']).first()
-    # sum_data = {
-    #     'id_tg': sum_stats.id_tg,
-    #     'summary': sum_stats.summary + data['summary'],
-    #     'boosts': sum_stats.boosts + data['boosts'],
-    #     'clicked': sum_stats.clicked + data['clicked'],
-    #     'debt': sum_stats.debt + data['debt']
-    # }
     sum_data = {key: data.get(key, '') for key in data.keys() if data.get(key, '') != ''}
     try:
         await cur_stats.update_from_dict(data)
@@ -147,12 +140,3 @@ async def db_check_hash(user_hash):
 async def db_del_hesh(del_hash):
     del_hash_ = await Hash.filter(temporary_hash=del_hash).first()
     await del_hash_.delete()
-# async def main():
-#     await init()
-#
-#     await db_settings_add_user('ref', 123, 15, True, True, True)
-#
-# import asyncio
-#
-# loop = asyncio.get_event_loop()
-# loop.run_until_complete(main())

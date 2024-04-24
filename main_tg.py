@@ -53,7 +53,7 @@ async def callback_handler(event: Event):
                     await callback.delete()
             await asyncio.sleep(1)
         except RuntimeError as ex:
-            logger.error(ex)
+            # logger.error(ex)
             logger.warning('Frontend: что-то взаимодействует с БД, ждём разблокировки...')
             await asyncio.sleep(1.3)
         except StopSignal as ex:

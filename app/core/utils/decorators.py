@@ -5,6 +5,26 @@ from loguru import logger
 from pyrogram.errors import AuthKeyUnregistered
 from pyrogram.errors.exceptions.unauthorized_401 import AuthKeyUnregistered as AuthKeyUnregistered_401
 
+
+def db_handler(tries=float('inf')):
+    def wrapper(func):
+        async def wrap(*args, **kwargs):
+            nonlocal tries
+            cur_tries = tries
+            while cur_tries > 0:
+                try:
+                    cur_tries -= 1
+                    result = await func(*args, **kwargs)
+                    return result
+                except RuntimeError:
+                    logger.debug('Что-то уже заняло бд, ожидаем...')
+                    await asyncio.sleep(1.5)
+
+        return wrap
+
+    return wrapper
+
+
 def request_handler(tries=3, log=False):
     """
     Декоратор для функций, производящих POST/GET запросы. Его функция - отслеживать статус запроса, делать повторные

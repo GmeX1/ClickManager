@@ -16,8 +16,8 @@ bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
 
-async def callback_handler(event: Event):  # TODO: Сделать ref копируевой и сделать смайлики, сделать провеку на лимит
-    # await init()
+async def callback_handler(event: Event):  # TODO: сделать смайлики
+    await init()
     runner = True
     while runner:
         try:
@@ -30,12 +30,18 @@ async def callback_handler(event: Event):  # TODO: Сделать ref копир
                 for callback in stats:
                     gif_url = await get_cat_gif()
                     res = await db_stats_get_session(callback.id_tg)
+                    caption = [f'За последнюю сессию вы заработали: {round(res.summary)}',
+                               f'Бустов было куплено: {round(res.boosts_bought)}',
+                               f'Совершено кликов: {round(res.clicked)}',
+                               f'К долгу было прибавлено: {round(res.debt)}']
+                    if callback.value == 'limit':
+                        caption.append('')
+                        caption.append('ВНИМАНИЕ! Ваш аккаунт достиг суточного лимита по сумме чеков.')
+                        caption.append(
+                            'Пожалуйста, переведите в рейтинг больше очков, чтобы не ударяться в порог в дальнейшем')
                     await bot.send_animation(
                         chat_id=callback.id_tg,
-                        caption=f'За последнюю сессию вы '
-                                f'заработали: {res.summary}\n'
-                                f'Бустов было куплено: {0} \n'
-                                f'Совершено кликов: {res.clicked}',
+                        caption='\n'.join(caption),
                         animation=gif_url
                     )
                     await callback.delete()
@@ -55,7 +61,7 @@ async def callback_handler(event: Event):  # TODO: Сделать ref копир
         except RuntimeError as ex:
             # logger.error(ex)
             logger.warning('Frontend: что-то взаимодействует с БД, ждём разблокировки...')
-            await asyncio.sleep(1.3)
+            await asyncio.sleep(2.3)
         except StopSignal as ex:
             raise ex
         except Exception as ex:

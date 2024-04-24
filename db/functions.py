@@ -1,6 +1,6 @@
 from loguru import logger
 from tortoise import Tortoise
-
+from app.core.utils.decorators import db_handler
 from db.models import Callbacks, SessionStats, Settings, SummaryStats, Hash
 
 
@@ -12,6 +12,7 @@ async def init():
     await Tortoise.generate_schemas(safe=True)  # АКТИВИРОВАТЬ ТОЛЬКО ДЛЯ СОЗДАНИЯ БД
 
 
+@db_handler()
 async def db_settings_get_user(id_tg: int):
     existing_user = await Settings.filter(id_tg=id_tg).first()
     if existing_user:
@@ -22,6 +23,7 @@ async def db_settings_get_user(id_tg: int):
         return None
 
 
+@db_handler()
 async def db_settings_add_user(ref: str, id_tg: int, buy_max_lvl: int = 15, buy_click=False, buy_miner=False,
                                buy_energy=False):
     existing_user = await Settings.filter(id_tg=id_tg).first()
@@ -40,6 +42,7 @@ async def db_settings_add_user(ref: str, id_tg: int, buy_max_lvl: int = 15, buy_
         return user
 
 
+@db_handler()
 async def db_settings_check_user_exists(id_tg):
     existing_user = await Settings.filter(id_tg=id_tg).first()
     if existing_user:
@@ -50,6 +53,7 @@ async def db_settings_check_user_exists(id_tg):
         return False
 
 
+@db_handler()
 async def db_settings_update_user(id_tg, data: dict):
     user = await Settings.filter(id_tg=id_tg).first()
     try:
@@ -61,6 +65,7 @@ async def db_settings_update_user(id_tg, data: dict):
         raise ex
 
 
+@db_handler()
 async def db_callbacks_get_user(id_tg, column=None, value=None):
     if not (column or value):
         return await Callbacks.filter(id_tg=id_tg).all()
@@ -73,6 +78,7 @@ async def db_callbacks_get_user(id_tg, column=None, value=None):
     return None
 
 
+@db_handler()
 async def db_callbacks_get_type(column=None, value=None):
     if column and value:
         return await Callbacks.filter(column=column, value=value).all()
@@ -83,6 +89,7 @@ async def db_callbacks_get_type(column=None, value=None):
     return None
 
 
+@db_handler()
 async def db_callbacks_add(id_tg, column, value):
     callback = await Callbacks.create(id_tg=id_tg, column=column, value=value)
     await callback.save()
@@ -90,10 +97,18 @@ async def db_callbacks_add(id_tg, column, value):
     return callback
 
 
+@db_handler()
 async def db_stats_update(data: dict):
     cur_stats = await SessionStats.filter(id_tg=data['id_tg']).first()
     sum_stats = await SummaryStats.filter(id_tg=data['id_tg']).first()
-    sum_data = {key: data.get(key, '') for key in data.keys() if data.get(key, '') != ''}
+    sum_data = {
+        'summary': sum_stats.summary + data.get('summary', 0),
+        'boosts': sum_stats.boosts + data.get('boosts', 0),
+        'boosts_bought': sum_stats.summary + data.get('boosts_bought', 0),
+        'clicked': sum_stats.summary + data.get('clicked', 0),
+        'debt': sum_stats.summary + data.get('debt', 0),
+    }
+    # sum_data = {key: data.get(key, '') for key in data.keys() if data.get(key, '') != ''}
     try:
         await cur_stats.update_from_dict(data)
         await cur_stats.save()
@@ -104,7 +119,7 @@ async def db_stats_update(data: dict):
         raise ex
 
 
-# За всё время
+@db_handler()  # За всё время
 async def db_stats_get_sum(id_tg):
     user = await SummaryStats.filter(id_tg=id_tg).first()
     if user:
@@ -112,7 +127,7 @@ async def db_stats_get_sum(id_tg):
     return None
 
 
-# За последнюю сессию
+@db_handler()  # За последнюю сессию
 async def db_stats_get_session(id_tg):
     user = await SessionStats.filter(id_tg=id_tg).first()
     if user:
@@ -120,6 +135,7 @@ async def db_stats_get_session(id_tg):
     return None
 
 
+@db_handler()
 async def db_add_hash(anton_hash):
     hash_p = await Hash.create(temporary_hash=anton_hash)
     await hash_p.save()
@@ -127,6 +143,7 @@ async def db_add_hash(anton_hash):
     return hash_p
 
 
+@db_handler()
 async def db_check_hash(user_hash):
     hash_user = await Hash.filter(temporary_hash=user_hash)
     if hash_user:
@@ -137,6 +154,7 @@ async def db_check_hash(user_hash):
         return False
 
 
+@db_handler()
 async def db_del_hesh(del_hash):
     del_hash_ = await Hash.filter(temporary_hash=del_hash).first()
     await del_hash_.delete()

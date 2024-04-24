@@ -49,7 +49,7 @@ async def async_input():
 async def session_checker(task_group: asyncio.TaskGroup, event: Event):
     """Дополнительный модуль, запускаемый рядом с кликерами для добавления доп. сессий"""
     global clients, clicker_clients
-    # await init()
+    await init()
     runner = True
     while runner:
         try:
@@ -72,17 +72,18 @@ async def session_checker(task_group: asyncio.TaskGroup, event: Event):
             await asyncio.sleep(3)
         except RuntimeError:
             logger.warning('Backend: что-то взаимодействует с БД, ждём разблокировки...')
-            await asyncio.sleep(2.4)
+            await asyncio.sleep(4.4)
         except StopSignal as ex:
             raise ex
 
 
 async def decorator_handler(client):  # Иногда появляется Cloudflare и просит включить куки :/
     global proxies, clients
-    # await init()
+    await init()
     update = False
     client.do_click = 2
     receipt_timer = 0  # Таймер для активации чеков
+    receipt_blacklist = set()
     while client.do_click != 3:
         try:
             if update:
@@ -110,19 +111,19 @@ async def decorator_handler(client):  # Иногда появляется Cloudf
                     for status in statuses:
                         if status:
                             value = eval(status.value)
-                            if client.id in value['ids']:
+                            if client.id == value['id'] and value["receiptId"] not in receipt_blacklist:
                                 logger.debug(
                                     f'{client.id} | Получен callback на активацию: {value["receiptId"]}')
-                                await client.receipt_activate(value['receiptId'])
-                                value['ids'].remove(client.id)
-                                if len(value['ids']) > 0:
-                                    await db_callbacks_add(status.id_tg, status.column, str(value))
-                                await status.delete()
-                        await asyncio.sleep(1)
+                                activate = await client.receipt_activate(value['receiptId'])
+                                if activate:
+                                    await status.delete()
+                                receipt_blacklist.add(value["receiptId"])
+                        await asyncio.sleep(0.3)
                     receipt_timer = time()
+            await asyncio.sleep(0.01)
 
         except AttributeError as ex:
-            if 'NoneType' in repr(ex) and 'json' in repr(ex):
+            if 'NoneType' in repr(ex):
                 logger.debug('Меняем прокси...')
                 update = True
             else:
@@ -151,6 +152,7 @@ async def decorator_handler(client):  # Иногда появляется Cloudf
 
 async def stop_app():
     global proxies, clicker_clients, clients
+    logger.warning('Закрываем backend...')
     proxies.close()
     for client in clicker_clients:
         if client.do_click == 1:
@@ -177,7 +179,7 @@ async def run_tasks(event: Event):
     except ExceptionGroup as group:
         for ex in group.exceptions:
             if ex.__class__ == StopSignal:
-                logger.warning('Закрываем backend...')
+                pass
                 # await stop_app()
             else:
                 raise ex
@@ -195,6 +197,6 @@ if __name__ == '__main__':
     try:
         asyncio.run(run_tasks(my_event))
     except KeyboardInterrupt:
-        logger.info('Закрываем backend...')
+        logger.warning('Закрываем backend...')
         my_event.set()
         # asyncio.run(stop_app())

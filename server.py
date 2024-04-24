@@ -8,7 +8,7 @@ from tortoise.connection import connections
 from main_clicker import run_tasks
 from main_tg import main_tg
 
-if __name__ == '__main__':  # TODO: количество купленных бустов в таблице
+if __name__ == '__main__':
     stop_signal = threading.Event()
     logger.remove()
     logger.add(sys.stderr, level='DEBUG', enqueue=True, colorize=True)
@@ -23,13 +23,12 @@ if __name__ == '__main__':  # TODO: количество купленных бу
             thread.start()
         while True:
             time.sleep(100)
-        # for thread in threads:
-        #     thread.join()
     except KeyboardInterrupt:
         logger.warning('Завершаем работу...')
         stop_signal.set()
         for thread in threads:
             thread.join()
-        asyncio.run(connections.close_all(discard=True))
+        asyncio.run(connections.close_all(discard=False))
         logger.info('Работа завершена.')
+        time.sleep(1)
         os._exit(0)

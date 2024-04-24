@@ -24,6 +24,7 @@ class SessionStats(Model):
     id_tg = fields.IntField(required=True)
     summary = fields.FloatField(default=0)
     boosts = fields.FloatField(default=0)
+    boosts_bought = fields.FloatField(default=0)
     clicked = fields.FloatField(default=0)
     debt = fields.FloatField(default=0)
 
@@ -33,6 +34,7 @@ class SummaryStats(Model):
     id_tg = fields.IntField(required=True)
     summary = fields.FloatField(default=0)
     boosts = fields.FloatField(default=0)
+    boosts_bought = fields.FloatField(default=0)
     clicked = fields.FloatField(default=0)
     debt = fields.FloatField(default=0)
 

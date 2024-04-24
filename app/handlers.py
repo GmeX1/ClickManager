@@ -102,7 +102,7 @@ async def add_user(message: Message):
     if message.from_user.id in admin:
         hash_a = await generate_referral_hash()
         await db_add_hash(hash_a)
-        await message.answer(f'https://t.me/ClickManagerbot?start={hash_a}')
+        await message.answer(f'`https://t.me/ClickManagerbot?start={hash_a}`', parse_mode='MARKDOWN')
 
 
 @router.message(Command('help'))

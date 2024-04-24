@@ -53,6 +53,7 @@ class ClickerClient:
             })
         self.buy_manager = BoostHandler()
         self.do_click = 1
+        self.receipt_blacklist = set()
         self.settings = dict()
 
     def get_init_data(self):
@@ -201,16 +202,12 @@ class ClickerClient:
                 await status.delete()
             elif status.column == 'receipt' and self.id in RECEIPTS:
                 value = eval(status.value)
-                if self.id in value['ids']:
+                if self.id == value['id'] and value["receiptId"] not in self.receipt_blacklist:
                     logger.debug(f'{self.id} | Получен callback по чекам: {status.value}')
-                    await self.receipt_activate(value['receiptId'])
-                    value['ids'].remove(self.id)
-                if len(value['ids']) > 0:
-                    await db_callbacks_add(status.id_tg, status.column, str(value))
-                await status.delete()
-
-            # else:
-            #     logger.debug(f'{self.id} | Получен callback с неизвестным столбцом: {status.column}')
+                    activate = await self.receipt_activate(value['receiptId'])
+                    if activate:
+                        await status.delete()
+                    self.receipt_blacklist.add(value['receiptId'])
 
     @request_handler()
     async def get_connection_status(self):
@@ -237,10 +234,9 @@ class ClickerClient:
 
     @request_handler()
     async def post_receipt_create(self, count):
-        logger.warning(count)
         result = await self.session.post(f'{BASE_URL}/receipts/create', timeout=10, json={
             'activations': 2,
-            'count': round(count / 2)
+            'count': int(count / 2)
         })
         return result
 
@@ -285,7 +281,6 @@ class ClickerClient:
 
     async def receipt_create(self, profile_data: dict):
         """Создаёт чек для списания накопленного долга (с учётом суточного лимита)"""
-        # TODO: Присылать уведомление при нехватке чека, перепроверять списание долга
         debt = (await db_stats_get_sum(self.id)).debt
         if debt > 0:
             cur_limit = profile_data['receipt']['limit'] - profile_data['receipt']['limitSpent']
@@ -297,7 +292,7 @@ class ClickerClient:
                 fee = count * 0.05
 
                 if count + fee < profile_data['balance']:
-                    result = await self.post_receipt_create(round(count))
+                    result = await self.post_receipt_create(int(count))
                 else:
                     result = await self.post_receipt_create(int(profile_data['balance'] - fee))
 
@@ -309,22 +304,28 @@ class ClickerClient:
                 elif result.status != 200:
                     logger.error(f'Неизвестная ошибка при создании чека: {result.status} ({await result.text()})')
 
-                await db_stats_update({'id_tg': self.id, 'debt': debt - count})
+                # await db_stats_update({'id_tg': self.id, 'debt': debt - count})
                 result = await result.json()
-                value = {'receiptId': result.get('receiptId', ''), 'ids': RECEIPTS.copy()}
-                await db_callbacks_add(result.get('creatorId', ''), 'receipt', str(value))
-                return 'callback'
+                for user in RECEIPTS:
+                    value = {'receiptId': result.get('receiptId', ''), 'id': user}
+                    await db_callbacks_add(result.get('creatorId', ''), 'receipt', str(value))
+                return count
             else:
                 logger.warning(f'{self.id} | Достигнут лимит перевода!')
-            return 'limit'  # TODO: сменить вывод на авто callback
+            return 'limit'
         return 'no debt'
 
     async def receipt_activate(self, receipt_id):
         result = await self.get_receipt_activate(receipt_id)
-        if result:
-            logger.debug(f'{self.id} | Успешно активирован чек: {receipt_id}')
+        if result.status == 200:
+            logger.info(f'{self.id} | Успешно активирован чек: {receipt_id}')
+            return True
+        elif result.status == 400:
+            logger.info(f'{self.id} | Не удалось активировать чек {receipt_id}: слишком высокий рейтинг!')
+            return False
         else:
-            logger.debug(f'{self.id} | Не удалось активировать чек!')
+            logger.info(f'{self.id} | Не удалось активировать чек! ({result.status})')
+            return False
 
     async def run_try(self):
         try:
@@ -357,6 +358,7 @@ class ClickerClient:
             'id_tg': self.id,
             'summary': balance,
             'boosts': 0,
+            'boosts_bought': 0,
             'clicked': 0,
             'debt': 0
         }
@@ -368,7 +370,7 @@ class ClickerClient:
 
         while True:
             if time() - db_update_start > 1:
-                await self.get_db_status()
+                await self.get_db_status()  # TODO: баг, наслаивается :(
                 db_update_start = time()
 
             profile_time = time() - profile_update_start
@@ -418,6 +420,7 @@ class ClickerClient:
                             run_stats['boosts'] += boost.get_price()
                             logger.info(f'Успешно куплен буст {boost.icon} {boost.name}! ({boost.type})')
                             shop_flag = True
+                            run_stats['boosts_bought'] += 1
                     else:
                         buy = await self.upgrade_boost(boost.abs_id)
                         if buy.status == 400:
@@ -436,6 +439,7 @@ class ClickerClient:
                             run_stats['boosts'] += boost.get_price()
                             logger.info(f'Успешно улучшен буст {boost.icon} {boost.name}! ({boost.type})')
                             shop_flag = True
+                            run_stats['boosts_bought'] += 1
 
                     if shop_flag:
                         profile_update_timer = -1
@@ -483,14 +487,22 @@ class ClickerClient:
         if self.id not in RECEIPTS:
             run_stats['debt'] = run_stats['summary'] * 0.15
         profile_data = await self.update_profile(False, False)
+
+        receipt_try = ''
         if self.id not in RECEIPTS:
             try:
-                await self.receipt_create(profile_data)
+                receipt_try = await self.receipt_create(profile_data)
             except ReceiptError as ex:
                 logger.error(ex)
+
+        if type(receipt_try) is int:
+            run_stats['debt'] -= receipt_try
         await db_stats_update(run_stats)
-        # TODO: краткая сводка информации по завершении работы
-        await db_callbacks_add(self.id, 'stats', '1')
+
+        if receipt_try == 'limit':
+            await db_callbacks_add(self.id, 'stats', 'limit')
+        else:
+            await db_callbacks_add(self.id, 'stats', '0')
         # logger.info(f'Статистика работы:\n{run_stats}')
 
     async def stop(self):

@@ -65,7 +65,7 @@ python-socks[asyncio]
     #   aiohttp-socks
 requests
     # via -r requirements.in
-tortoise
+tortoise-orm
     # via -r requirements.in
 typing-extensions
     # via
@@ -78,3 +78,4 @@ win32-setctime
     # via loguru
 yarl
     # via aiohttp
+tgcrypto

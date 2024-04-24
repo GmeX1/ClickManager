@@ -16,7 +16,7 @@ bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
 
-async def callback_handler(event: Event):
+async def callback_handler(event: Event):  # TODO: Сделать ref копируевой и сделать смайлики, сделать провеку на лимит
     # await init()
     runner = True
     while runner:

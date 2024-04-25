@@ -30,10 +30,10 @@ async def callback_handler(event: Event):  # TODO: сделать смайлик
                 for callback in stats:
                     gif_url = await get_cat_gif()
                     res = await db_stats_get_session(callback.id_tg)
-                    caption = [f'За последнюю сессию вы заработали: {round(res.summary)}',
-                               f'Бустов было куплено: {round(res.boosts_bought)}',
+                    caption = [f'💰За последнюю сессию вы заработали: {round(res.summary)}',
+                               f'📈Бустов было куплено: {round(res.boosts_bought)}',
                                f'Совершено кликов: {round(res.clicked)}',
-                               f'К долгу было прибавлено: {round(res.debt)}']
+                               f'📉К долгу было прибавлено: {round(res.debt)}']
                     if callback.value == 'limit':
                         caption.append('')
                         caption.append('ВНИМАНИЕ! Ваш аккаунт достиг суточного лимита по сумме чеков.')

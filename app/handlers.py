@@ -11,8 +11,9 @@ from pyrogram import Client
 from pyrogram.errors.exceptions import SessionPasswordNeeded
 
 import app.key as k
-from Private import admin, api_hash, api_id
+from Private import api_hash, api_id, admin
 from app.md5_hash import generate_referral_hash
+
 from db.functions import (db_add_hash, db_callbacks_add, db_check_hash, db_del_hesh, db_settings_add_user,
                           db_settings_check_user_exists, db_settings_get_user, db_settings_update_user,
                           db_stats_get_sum)
@@ -29,8 +30,6 @@ async def get_cat_gif():
             gif_url = data[0]['url']
             return gif_url
 
-
-# TODO: сделать админ панель, отладка ошибок
 
 class Reg(StatesGroup):
     number = State()
@@ -54,30 +53,24 @@ async def test_db_callback(message: Message, command: CommandObject):
 
 @router.message(CommandStart())
 async def cmd_start(message: Message):
-    if await db_check_hash(message.text[7:]):
-        logger.info(message.from_user.id)
-        result = await db_settings_add_user('ref', message.from_user.id)
-        if not result:
-            await message.answer('Нельзя переходить по собственной ссылке.')
+    if await db_settings_check_user_exists(message.from_user.id):
+        res = await db_settings_get_user(message.from_user.id)
+        if res.active == 1:
+            await message.reply(f'Привет. \nТвой ID:{message.from_user.id} ты есть в нашей системе.\n',
+                                reply_markup=k.main)
         else:
-            await db_callbacks_add(
-                message.from_user.id,
-                'join',
-                str({'link': message.from_user.username, 'name': message.from_user.full_name})
-            )
-            await db_del_hesh(message.text[7:])
-            await message.reply(f'Привет. \nТвой ID:{message.from_user.id}. Ты добавлен в нашу систему.\n'
+            await message.reply(f'Привет. \nТвой ID:{message.from_user.id} ты есть в нашей системе.\n'
                                 f'Тебе осталось зарегистрироваться по команде /reg', reply_markup=k.main)
-    else:
-        if await db_settings_check_user_exists(message.from_user.id):
-            res = await db_settings_get_user(message.from_user.id)
-            if res.active == 1:
-                await message.reply(f'Привет. \nТвой ID:{message.from_user.id}. Ты есть в нашей системе.\n',
-                                    reply_markup=k.main)
-            else:
-                await message.reply(f'Привет. \nТвой ID:{message.from_user.id}. Ты есть в нашей системе.\n'
-                                    f'Тебе осталось зарегистрироваться по команде /reg', reply_markup=k.main)
 
+    else:
+        if await db_check_hash(message.text[7:]):
+            logger.info(message.from_user.id)
+            result = await db_settings_add_user('ref', message.from_user.id)
+            await db_del_hesh(message.text[7:])
+            await message.reply(f'Привет. \nТвой ID:{message.from_user.id} ты есть в нашей системе.\n'
+                                f'Тебе осталось зарегистрироваться по команде /reg', reply_markup=k.main)
+            if not result:
+                await message.answer('Нельзя переходить по собственной ссылке')
         else:
             logger.warning(f'Неизвестный пользователь: {message.from_user.username} ({message.from_user.id})')
 
@@ -126,8 +119,8 @@ async def get_prof(message: Message):
     if await db_settings_check_user_exists(message.from_user.id):
         gif_url = await get_cat_gif()
         res = await db_stats_get_sum(message.from_user.id)
-        await message.reply_animation(caption=f'Благодаря нашему боту вы заработали: {res.summary}\n'
-                                              f'Было куплено бустов:{0}', animation=gif_url)
+        await message.reply_animation(caption=f'💰Благодаря нашему боту вы заработали: {res.summary}\n'
+                                              f'📈Было куплено бустов:{0}', animation=gif_url)
 
 
 @router.message(F.text == '🍉Запустить кликер на арбузы')
@@ -182,7 +175,7 @@ async def reg_code(message: Message, state: FSMContext):
             await db_settings_update_user(message.from_user.id, {'active': True})
             await db_callbacks_add(message.from_user.id, 'active', await data['Clients'].export_session_string())
             await message.answer("Спасибо")
-            await message.reply(f'Привет. \nТвой ID:{message.from_user.id}. Ты есть в нашей системе.\n',
+            await message.reply(f'Привет. \nТвой ID:{message.from_user.id} ты есть в нашей системе.\n',
                                 reply_markup=k.main)
             await state.clear()
         except SessionPasswordNeeded:
@@ -203,7 +196,7 @@ async def reg_code(message: Message, state: FSMContext):
         await db_settings_update_user(message.from_user.id, {'active': True})
         await db_callbacks_add(message.from_user.id, 'active', await data['Clients'].export_session_string())
         await message.answer("Спасибо")
-        await message.reply(f'Привет. \nТвой ID:{message.from_user.id}. Ты есть в нашей системе.\n',
+        await message.reply(f'Привет. \nТвой ID:{message.from_user.id} ты есть в нашей системе.\n',
                             reply_markup=k.main)
         await state.clear()
     except Exception as ex:

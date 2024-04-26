@@ -9,7 +9,7 @@ async def init():
         db_url='sqlite://db/db.sqlite3',
         modules={'models': ['db.models']},
     )
-    await Tortoise.generate_schemas(safe=True)  # АКТИВИРОВАТЬ ТОЛЬКО ДЛЯ СОЗДАНИЯ БД
+    await Tortoise.generate_schemas(safe=True)
 
 
 @db_handler()
@@ -104,9 +104,9 @@ async def db_stats_update(data: dict):
     sum_data = {
         'summary': sum_stats.summary + data.get('summary', 0),
         'boosts': sum_stats.boosts + data.get('boosts', 0),
-        'boosts_bought': sum_stats.summary + data.get('boosts_bought', 0),
-        'clicked': sum_stats.summary + data.get('clicked', 0),
-        'debt': sum_stats.summary + data.get('debt', 0),
+        'boosts_bought': sum_stats.boosts_bought + data.get('boosts_bought', 0),
+        'clicked': sum_stats.clicked + data.get('clicked', 0),
+        'debt': sum_stats.debt + data.get('debt', 0),
     }
     # sum_data = {key: data.get(key, '') for key in data.keys() if data.get(key, '') != ''}
     try:
@@ -155,6 +155,6 @@ async def db_check_hash(user_hash):
 
 
 @db_handler()
-async def db_del_hesh(del_hash):
+async def db_del_hash(del_hash):
     del_hash_ = await Hash.filter(temporary_hash=del_hash).first()
     await del_hash_.delete()

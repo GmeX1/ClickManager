@@ -11,21 +11,19 @@ from pyrogram import Client
 from pyrogram.errors.exceptions import SessionPasswordNeeded
 
 import app.key as k
-from Private import api_hash, api_id, admin
-from app.md5_hash import generate_referral_hash
+from privates import API_HASH, API_ID, ADMIN
+from app.core.utils.md5_hash import generate_referral_hash
 
-from db.functions import (db_add_hash, db_callbacks_add, db_check_hash, db_del_hesh, db_settings_add_user,
+from db.functions import (db_add_hash, db_callbacks_add, db_check_hash, db_del_hash, db_settings_add_user,
                           db_settings_check_user_exists, db_settings_get_user, db_settings_update_user,
                           db_stats_get_sum)
 
-# import aiohttp гифки
 router = Router()
-CAT_API_URL = 'https://api.thecatapi.com/v1/images/search?mime_types=gif'
 
 
 async def get_cat_gif():
     async with aiohttp.ClientSession() as session:
-        async with session.get(CAT_API_URL) as response:
+        async with session.get('https://api.thecatapi.com/v1/images/search?mime_types=gif') as response:
             data = await response.json()
             gif_url = data[0]['url']
             return gif_url
@@ -34,7 +32,7 @@ async def get_cat_gif():
 class Reg(StatesGroup):
     number = State()
     code = State()
-    sCode = State()
+    s_code = State()
     Clients = State()
     v_cod = State()
 
@@ -66,7 +64,7 @@ async def cmd_start(message: Message):
         if await db_check_hash(message.text[7:]):
             logger.info(message.from_user.id)
             result = await db_settings_add_user('ref', message.from_user.id)
-            await db_del_hesh(message.text[7:])
+            await db_del_hash(message.text[7:])
             await message.reply(f'Привет. \nТвой ID:{message.from_user.id} ты есть в нашей системе.\n'
                                 f'Тебе осталось зарегистрироваться по команде /reg', reply_markup=k.main)
             if not result:
@@ -77,10 +75,10 @@ async def cmd_start(message: Message):
 
 @router.message(Command('add'))
 async def add_user(message: Message, command: CommandObject):
-    if message.from_user.id in admin:
+    if message.from_user.id in ADMIN:
         """Функция для ручного добавления пользователя в БД"""
         user_id = command.args
-        if type(user_id) != int:
+        if type(user_id) is not int:
             user_id = int(user_id)
             logger.info(user_id)
         result = await db_settings_add_user('ref', user_id)
@@ -92,7 +90,7 @@ async def add_user(message: Message, command: CommandObject):
 
 @router.message(Command('ref'))
 async def add_user(message: Message):
-    if message.from_user.id in admin:
+    if message.from_user.id in ADMIN:
         hash_a = await generate_referral_hash()
         await db_add_hash(hash_a)
         await message.answer(f'`https://t.me/ClickManagerbot?start={hash_a}`', parse_mode='MARKDOWN')
@@ -102,10 +100,11 @@ async def add_user(message: Message):
 async def get_help(message: Message):
     if await db_settings_check_user_exists(message.from_user.id):
         gif_url = await get_cat_gif()
-        await message.reply_animation(animation=gif_url, caption=f'/help - показывает функции бота'
-                                                                 f'\n "Профиль" - показывает сколько вы заработали.'
-                                                                 f'\n /start - запускает бота.'
-                                                                 f'\n "Запустить кликер на арбузы🍉" - Запускает кликер+.')
+        await message.reply_animation(animation=gif_url, caption='\n'.join([
+            f'/help - показывает функции бота',
+            f'"Профиль" - показывает сколько вы заработали.',
+            f'/start - запускает бота.',
+            f'"Запустить кликер на арбузы🍉" - Запускает кликер+.']))
 
 
 @router.message(F.text == '🆘Помощь')
@@ -119,8 +118,14 @@ async def get_prof(message: Message):
     if await db_settings_check_user_exists(message.from_user.id):
         gif_url = await get_cat_gif()
         res = await db_stats_get_sum(message.from_user.id)
-        await message.reply_animation(caption=f'💰Благодаря нашему боту вы заработали: {res.summary}\n'
-                                              f'📈Было куплено бустов:{0}', animation=gif_url)
+        await message.reply_animation(
+            caption='\n'.join([
+                f'💰 Благодаря нашему боту вы заработали: {res.summary:.0f}',
+                f'💸 Потрачено денег на бусты: {res.boosts:.0f}',
+                f'📈 Было куплено бустов: {res.boosts_bought:.0f}', f'👆 Накликано: {res.clicked:.0f}',
+                f'💲 Долг: {res.debt:.0f}'
+            ]),
+            animation=gif_url)
 
 
 @router.message(F.text == '🍉Запустить кликер на арбузы')
@@ -148,7 +153,7 @@ async def clicker_on(callback: CallbackQuery):
 async def reg(callback: CallbackQuery):
     if await db_settings_check_user_exists(callback.from_user.id):
         if (await db_settings_get_user(callback.from_user.id)).active == 0:
-            await callback.answer('Отправьте свой контакт', reply_markup=k.contact_btn)
+            await callback.answer('👤 Отправьте свой контакт', reply_markup=k.contact_btn)
 
 
 @router.message(F.contact)  # Нельзя напрямую отправлять код 0_о
@@ -157,12 +162,12 @@ async def save_phone_number(message: Message, state: FSMContext):
         if (await db_settings_get_user(message.from_user.id)).active == 0:
             if message.contact.user_id == message.from_user.id:
                 await state.update_data(number=message.contact.phone_number)
-                client = Client(str(message.from_user.id), api_id, api_hash)
+                client = Client(str(message.from_user.id), API_ID, API_HASH)
                 await client.connect()
-                sCode = await client.send_code(message.contact.phone_number)
-                await state.update_data(Clients=client, sCode=sCode)
+                s_code = await client.send_code(message.contact.phone_number)
+                await state.update_data(Clients=client, s_code=s_code)
                 await message.answer(
-                    'Введите код (⚠️⚠️⚠️ОБЯЗАТЕЛЬНО⚠️⚠️⚠️: поставьте пробел внутри кода, место не важно)')
+                    'Введите код (⚠️ОБЯЗАТЕЛЬНО⚠️: поставьте пробел внутри кода, место не важно)')
                 await state.set_state(Reg.code)
 
 
@@ -171,7 +176,7 @@ async def reg_code(message: Message, state: FSMContext):
     if await db_settings_check_user_exists(message.from_user.id):
         try:
             data = await state.get_data()
-            await data["Clients"].sign_in(data["number"], data["sCode"].phone_code_hash, message.text.replace(' ', ''))
+            await data["Clients"].sign_in(data["number"], data["s_code"].phone_code_hash, message.text.replace(' ', ''))
             await db_settings_update_user(message.from_user.id, {'active': True})
             await db_callbacks_add(message.from_user.id, 'active', await data['Clients'].export_session_string())
             await message.answer("Спасибо")
@@ -180,11 +185,11 @@ async def reg_code(message: Message, state: FSMContext):
             await state.clear()
         except SessionPasswordNeeded:
             await state.update_data(code=message.text.replace(' ', ''))
-            await message.answer('У вас установлен 2fa. Пожалуйста, введите мастер-пароль.')
+            await message.answer('У вас установлен 2FA. Пожалуйста, введите мастер-пароль.')
             await state.set_state(Reg.v_cod)
         except Exception as ex:
             logger.error(f'{ex.__class__.__name__}: {ex}')
-            await message.answer('Ошибка входа. Отправьте контакт заново и перечитайте условия')
+            await message.answer('⚠️Ошибка входа. Отправьте контакт заново и перечитайте условия')
 
 
 @router.message(Reg.v_cod)
@@ -192,7 +197,7 @@ async def reg_code(message: Message, state: FSMContext):
     try:
         data = await state.get_data()
         await data["Clients"].check_password(message.text)
-        await data["Clients"].sign_in(data["number"], data["sCode"].phone_code_hash, data['code'])
+        await data["Clients"].sign_in(data["number"], data["s_code"].phone_code_hash, data['code'])
         await db_settings_update_user(message.from_user.id, {'active': True})
         await db_callbacks_add(message.from_user.id, 'active', await data['Clients'].export_session_string())
         await message.answer("Спасибо")
@@ -317,8 +322,8 @@ async def change_lvl(message: Message, state: FSMContext):
             value = message.text
             change = await db_settings_update_user(message.from_user.id, {'BUY_MAX_LVL': int(value)})
             if change:
-                await message.answer('✅Операция была успешно выполнена.')
+                await message.answer('✅ Операция была успешно выполнена.')
                 await db_callbacks_add(message.from_user.id, 'settings', value)
         except ValueError:
-            await message.answer('❌Не удалось совершить операцию! Введите число заново: ')
+            await message.answer('❌ Не удалось совершить операцию! Введите число заново: ')
             await state.set_state(Max.max_lvl)

@@ -6,7 +6,7 @@ from threading import Event
 from aiogram import Bot, Dispatcher
 from loguru import logger
 
-from Private import TOKEN, admin
+from privates import TOKEN, ADMIN
 from app.core.utils.exceptions import StopSignal
 from app.core.utils.scripts import get_cat_gif
 from app.handlers import router
@@ -30,10 +30,11 @@ async def callback_handler(event: Event):  # TODO: сделать смайлик
                 for callback in stats:
                     gif_url = await get_cat_gif()
                     res = await db_stats_get_session(callback.id_tg)
-                    caption = [f'💰За последнюю сессию вы заработали: {round(res.summary)}',
-                               f'📈Бустов было куплено: {round(res.boosts_bought)}',
-                               f'Совершено кликов: {round(res.clicked)}',
-                               f'📉К долгу было прибавлено: {round(res.debt)}']
+                    caption = [f'💰 За последнюю сессию вы заработали: {res.summary:.0f}',
+                               f'💸 Потрачено денег на бусты: {res.boosts:.0f}',
+                               f'📈 Бустов было куплено: {res.boosts_bought:.0f}',
+                               f'👆 Совершено кликов: {res.clicked:.0f}',
+                               f'📉 К долгу было прибавлено: {res.debt:.0f}']
                     if callback.value == 'limit':
                         caption.append('')
                         caption.append('ВНИМАНИЕ! Ваш аккаунт достиг суточного лимита по сумме чеков.')
@@ -49,7 +50,7 @@ async def callback_handler(event: Event):  # TODO: сделать смайлик
             if len(joins) > 0:
                 for callback in joins:
                     value = eval(callback.value)
-                    for admin_id in admin:
+                    for admin_id in ADMIN:
                         await bot.send_message(
                             chat_id=admin_id,
                             text='\n'.join(['⚠️К системе подключён новый пользователь!',

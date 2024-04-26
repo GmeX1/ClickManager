@@ -10,7 +10,6 @@ from tortoise.connection import connections
 from main_clicker import run_tasks
 from main_tg import main_tg
 
-# TODO: Краш при отсутствии кликов, краш от прокси, изменить вид суммарной статы
 if __name__ == '__main__':
     stop_signal = threading.Event()
     logger.remove()

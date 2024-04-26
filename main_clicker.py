@@ -16,7 +16,7 @@ from app.core.proxy import ProxyHandler
 from app.core.utils.scripts import get_clients, run_client
 from db.functions import db_callbacks_add, db_callbacks_get_type, db_callbacks_get_user, db_settings_update_user, init
 from temp_vars import LOG_LEVEL
-from temp_vars_local import RECEIPTS
+from privates import RECEIPTS
 
 clients, clicker_clients = list(), list()
 proxies = ProxyHandler()

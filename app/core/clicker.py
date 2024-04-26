@@ -18,7 +18,7 @@ from app.core.utils.tls import get_ssl
 from db.functions import (db_callbacks_add, db_callbacks_get_user, db_settings_get_user, db_stats_get_sum,
                           db_stats_update)
 from temp_vars import BASE_URL, CLICKS_AMOUNT, CLICKS_SLEEP, ENC_KEY, UPDATE_FREQ, UPDATE_VAR
-from temp_vars_local import RECEIPTS
+from privates import RECEIPTS
 
 
 class ClickerClient:
@@ -371,7 +371,7 @@ class ClickerClient:
 
         while True:
             if time() - db_update_start > 1:
-                await self.get_db_status()  # TODO: баг, наслаивается :(
+                await self.get_db_status()
                 db_update_start = time()
 
             profile_time = time() - profile_update_start

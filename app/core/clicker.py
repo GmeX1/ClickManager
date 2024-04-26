@@ -107,6 +107,7 @@ class ClickerClient:
         if test is None:
             return False
         if test.status == 200:
+            logger.debug('Сессия успешно создана!')
             return True
         logger.error(f'Ошибка {test.status} при обновлении прокси: {await test.text()}')
         return False
